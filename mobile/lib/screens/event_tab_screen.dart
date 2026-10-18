@@ -15,6 +15,7 @@ class _EventTabScreenState extends State<EventTabScreen> {
   final openEvents = <AlertMessage>[];
   final closedEvents = <AlertMessage>[];
   bool _loading = true;
+  bool _refreshInFlight = false;
   String? _loadError;
 
   @override
@@ -35,6 +36,9 @@ class _EventTabScreenState extends State<EventTabScreen> {
               : Stack(
                   children: [
                     RefreshIndicator(
+                      edgeOffset: 18,
+                      displacement: 56,
+                      triggerMode: RefreshIndicatorTriggerMode.onEdge,
                       onRefresh: getAlerts,
                       child: EventsList(
                         events: events,
@@ -61,6 +65,10 @@ class _EventTabScreenState extends State<EventTabScreen> {
   }
 
   Future<void> getAlerts() async {
+    // A gentle overscroll can emit more than one refresh notification. Keep
+    // the list responsive and make each pull map to a single network request.
+    if (_refreshInFlight) return;
+    _refreshInFlight = true;
     if (mounted) {
       setState(() {
         _loading = true;
@@ -91,6 +99,7 @@ class _EventTabScreenState extends State<EventTabScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+      _refreshInFlight = false;
     }
   }
 }
