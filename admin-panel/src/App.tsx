@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 import { Fragment, useState } from "react";
 import "./App.css";
 import Layout from "./components/Layout/Layout";
@@ -10,26 +10,45 @@ import Geography from "./components/Geography/Geography";
 import Messages from "./components/Messages/Messages";
 import Login from "./components/Login/Login"
 import NotFoundPage from './components/NotFoundPage/NotFoundPage';
+import { useAuth } from './context/AuthContext';
 
 function App() {
   const [windowOpen, setWindowOpen] = useState(false);
+  const { user, loading } = useAuth();
+
+  if (loading) return <div className="login-page">טוען…</div>;
 
   return (
     <Fragment>
-      <Layout setWindowOpen={setWindowOpen}/>
-        {windowOpen && <EventsModal open={windowOpen} onClose={() => setWindowOpen(false)} />}
-
       <Routes>
-
-      <Route path="/events-table" element={<EventTable />} />
-      <Route path="/situation" element={<Situation />} />
-      <Route index path="/" element={<Login  />} />
-      <Route path="/*" element={<NotFoundPage/>} />
-      <Route path="/chat" element={<Messages />} />
-      <Route path="/geography" element={<Geography />} />
-      <Route path="/ptt" element={ <Ptt />} />
+        <Route index path="/" element={user ? <Navigate to="/events-table" replace /> : <Login />} />
+        <Route element={<ProtectedLayout windowOpen={windowOpen} setWindowOpen={setWindowOpen} />}>
+          <Route path="/events-table" element={<EventTable />} />
+          <Route path="/situation" element={<Situation />} />
+          <Route path="/chat" element={<Messages />} />
+          <Route path="/geography" element={<Geography />} />
+          <Route path="/ptt" element={<Ptt />} />
+        </Route>
+        <Route path="/*" element={user ? <NotFoundPage /> : <Navigate to="/" replace />} />
       </Routes>
     </Fragment>
+  );
+}
+
+function ProtectedLayout({
+  windowOpen,
+  setWindowOpen,
+}: {
+  windowOpen: boolean;
+  setWindowOpen: (open: boolean) => void;
+}) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/" replace />;
+  return (
+    <>
+      <Layout setWindowOpen={setWindowOpen} />
+      <EventsModal open={windowOpen} onClose={() => setWindowOpen(false)} />
+    </>
   );
 }
 

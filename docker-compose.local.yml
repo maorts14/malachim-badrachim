@@ -1,0 +1,61 @@
+name: rescue-alert-local
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - local_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.local
+    environment:
+      FIREBASE_SERVICE_ACCOUNT: /run/secrets/firebase-service-account.json
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - ./backend/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+    ports:
+      - "8004:8000"
+    command: sh -c "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:16379:6379"
+
+  admin-panel:
+    image: node:lts-alpine
+    working_dir: /app
+    volumes:
+      - ./admin-panel:/app
+      - local_admin_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    command: sh -c "npm ci && npm run dev:local -- --host 0.0.0.0"
+    depends_on:
+      - backend
+
+volumes:
+  local_postgres_data:
+  local_admin_node_modules:

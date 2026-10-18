@@ -90,6 +90,8 @@ if config("USE_X_FORWARDED_PROTO", default=False, cast=bool):
 
 INSTALLED_APPS = [
     'django.contrib.gis',
+    'daphne',
+    'channels',
     'rest_framework',
     'drf_spectacular',
     'corsheaders',
@@ -135,6 +137,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Redis provides cross-process fan-out for authenticated realtime message
+# notifications. The in-memory layer is used only for local commands/tests
+# where no Redis service has been configured.
+REDIS_URL = config('REDIS_URL', default='')
+CHANNEL_LAYERS = {
+    'default': (
+        {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
+        }
+        if REDIS_URL
+        else {'BACKEND': 'channels.layers.InMemoryChannelLayer'}
+    ),
+}
 
 
 # DATABASE CONFIGURATION

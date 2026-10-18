@@ -1,215 +1,66 @@
-import { useState, useRef, type KeyboardEvent } from "react";
-import {
-  Search,
-  MoreVertical,
-  Smile,
-  Paperclip,
-  Send,
-  Users,
-  Check,
-  CheckCheck,
-  Image as ImageIcon,
-} from "lucide-react";
-import "./GroupChat.css";
-import Avatar from "../../Avatar/Avatar";
-import { INITIAL_MESSAGES } from "../../../data/initialMessages";
-import { AVATAR_COLORS } from "../../../data/avatarColors";
-import { type Message,type TextMessage } from "../../../types/types";
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Send, Users } from 'lucide-react';
+import { type ApiAlert, type ApiMessage, openMessageSocket, rescueApi } from '../../../services/api';
+import './GroupChat.css';
 
-function nowTime(): string {
-  return new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+interface GroupChatProps { alert: ApiAlert; }
+
+function displayTime(timestamp: string): string {
+  return new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' }).format(new Date(timestamp));
 }
 
-
-function DoubleCheck({ color = "#53bdeb" }: { color?: string }) {
-  return <CheckCheck size={15} color={color} className="gc-tick" />;
-}
-
-function SingleCheck() {
-  return <Check size={13} color="#8696a0" className="gc-tick" />;
-}
-
-
-interface TextBubbleProps {
-  msg: TextMessage;
-  isExpanded: boolean;
-  onExpand: () => void;
-}
-
-function TextBubble({ msg, isExpanded, onExpand }: TextBubbleProps) {
-  const isLeft = msg.align === "left";
-  const displayText =
-    msg.hasReadMore && !isExpanded ? msg.text.slice(0, 140) + "... " : msg.text;
-
-  return (
-    <div className={`gc-bubble ${isLeft ? "gc-bubble--left" : "gc-bubble--right"}`}>
-      {!isLeft && msg.sender && (
-        <div
-          className="gc-sender-name"
-          style={{ color: AVATAR_COLORS[msg.sender] ?? "#5B8DEF" }}
-        >
-          {msg.sender}
-        </div>
-      )}
-
-      <div className="gc-msg-text">
-        {displayText}
-        {msg.hasReadMore && !isExpanded && (
-          <span className="gc-read-more" onClick={onExpand}>Read More</span>
-        )}
-      </div>
-
-      <div className="gc-time-line">
-        <span className="gc-time-text">{msg.time}</span>
-        {isLeft ? <DoubleCheck color="#53bdeb" /> : <SingleCheck />}
-      </div>
-    </div>
-  );
-}
-
-
-
-interface ImageBubbleProps {
-  time: string;
-}
- function ImageBubble({ time }: ImageBubbleProps) {
-  return (
-    <div className="gc-bubble gc-bubble--right gc-bubble--image">
-      <div className="gc-image-placeholder">
-        <ImageIcon size={40} color="#78909c" />
-      </div>
-      <div className="gc-time-line">
-        <span className="gc-time-text">{time}</span>
-        <DoubleCheck />
-      </div>
-    </div>
-  );
-}
-
-
-export default function GroupChat() {
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
-  const [input, setInput]       = useState<string>("");
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const bottomRef               = useRef<HTMLDivElement>(null);
-
-
-  const sendMessage = (): void => {
-    const text = input.trim();
-    if (!text) return;
-    const next: TextMessage = {
-      id: Date.now(),
-      sender: "me",
-      text,
-      align: "left",
-      time: nowTime(),
-      status: "sent",
+export default function GroupChat({ alert }: GroupChatProps) {
+  const [messages, setMessages] = useState<ApiMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const appendMessage = (message: ApiMessage) => {
+    setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+  };
+  useEffect(() => {
+    let active = true;
+    let socket: WebSocket | undefined;
+    const load = async () => {
+      try {
+        const items = await rescueApi.listMessages(alert.id);
+        if (active) { setMessages([...items].reverse()); setError(''); }
+      } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : 'טעינת השיחה נכשלה.'); }
     };
-    setMessages((prev) => [...prev, next]);
-    setInput("");
+    void load();
+    // Keep the operational thread current without requiring a manual refresh.
+    // The API remains the authorization source for every poll; when a WebSocket
+    // transport is introduced this interval can be replaced without changing
+    // the message contract.
+    const timer = window.setInterval(() => { void load(); }, 5000);
+    void openMessageSocket((event) => {
+      if (active && event.message.alert === alert.id) appendMessage(event.message);
+    }).then((connection) => {
+      if (active) socket = connection;
+      else connection.close();
+    }).catch(() => {
+      // Polling above remains a deliberately safe compatibility fallback.
+    });
+    return () => { active = false; window.clearInterval(timer); socket?.close(); };
+  }, [alert.id]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const message = await rescueApi.createAlertMessage(alert.id, text);
+      appendMessage(message);
+      setInput(''); setError('');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'שליחת ההודעה נכשלה.'); }
+    finally { setSending(false); }
   };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') { event.preventDefault(); void sendMessage(); }
   };
-
-  const toggleExpand = (id: number): void =>
-    setExpanded((prev) => new Set([...prev, id]));
-
-
-  return (
-    <div className="gc-root">
-      {/* ── Header ── */}
-      <header className="gc-header">
-        <div className="gc-header__left">
-          <div className="gc-header__group-avatar">
-            <Users size={22}  />
-          </div>
-          <div>
-            <div className="gc-header__name">Group 50</div>
-            <div className="gc-header__sub">
-              John Henry, Brian Wilson, Dan Gilad, George Ezra, Guy Levi...
-            </div>
-          </div>
-        </div>
-
-        <div className="gc-header__actions">
-          <button className="gc-icon-btn" aria-label="Search">
-            <Search size={20}  />
-          </button>
-          <button className="gc-icon-btn" aria-label="Menu">
-            <MoreVertical size={20}  />
-          </button>
-        </div>
-      </header>
-
-      {/* ── Messages ── */}
-      <main className="gc-body">
-        <div className="gc-date-divider">
-          <span className="gc-date-pill">Today</span>
-        </div>
-
-        {messages.map((msg) => {
-          const isLeft = msg.align === "left";
-
-          if (msg.type === "image") {
-            return (
-              <div key={msg.id} className="gc-msg-row gc-msg-row--right">
-                <ImageBubble time={msg.time} />
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={msg.id}
-              className={`gc-msg-row ${isLeft ? "gc-msg-row--left" : "gc-msg-row--right"}`}
-            >
-              {!isLeft && msg.sender && <Avatar row={{ name: msg.sender}} />}
-              <TextBubble
-                msg={msg as TextMessage}
-                isExpanded={expanded.has(msg.id)}
-                onExpand={() => toggleExpand(msg.id)}
-              />
-            </div>
-          );
-        })}
-
-        <div ref={bottomRef} />
-      </main>
-
-      {/* ── Input bar ── */}
-      <footer className="gc-input-bar">
-        <button className="gc-icon-btn" aria-label="Emoji">
-          <Smile size={22} />
-        </button>
-
-        <input
-          className="gc-input"
-          placeholder="Type a message"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          aria-label="Message input"
-        />
-
-        <button className="gc-icon-btn" aria-label="Attach file">
-          <Paperclip size={22} />
-        </button>
-
-        <button
-          className="gc-send-btn"
-          onClick={sendMessage}
-          disabled={!input.trim()}
-          aria-label="Send message"
-        >
-          <Send size={18} color="white" className="gc-send-icon" />
-        </button>
-      </footer>
-
-    </div>
-  );
+  return <section className="gc-root" aria-label={`שיח אירוע ${alert.title}`}>
+    <header className="gc-header"><div className="gc-header__left"><div className="gc-header__group-avatar"><Users size={22} /></div><div><div className="gc-header__name">{alert.title}</div><div className="gc-header__sub">{alert.assignments.length ? `צוות מוקצה: ${alert.assignments.map((item) => item.username).join(', ')}` : 'טרם הוקצה צוות'}</div></div></div></header>
+    <main className="gc-body"><div className="gc-date-divider"><span className="gc-date-pill">עדכוני אירוע</span></div>{error && <p className="gc-error">{error}</p>}{messages.length === 0 && !error && <p className="gc-empty">עדיין אין הודעות לאירוע זה.</p>}{messages.map((message) => <div className="gc-msg-row gc-msg-row--right" key={message.id}><div className="gc-bubble gc-bubble--right"><div className="gc-sender-name">{message.sender.username}</div><div className="gc-msg-text">{message.text || message.title}</div><div className="gc-time-line"><span className="gc-time-text">{displayTime(message.timestamp)}</span></div></div></div>)}<div ref={bottomRef} /></main>
+    <footer className="gc-input-bar"><input className="gc-input" placeholder="כתבו עדכון לצוות…" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} aria-label="תוכן ההודעה" /><button className="gc-send-btn" onClick={() => void sendMessage()} disabled={!input.trim() || sending} aria-label="שליחת הודעה"><Send size={18} color="white" /></button></footer>
+  </section>;
 }

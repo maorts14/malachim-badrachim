@@ -20,8 +20,6 @@ dependencies:
   firebase_messaging: ^16.4.3
   curved_labeled_navigation_bar: ^2.0.6
   flutter_riverpod: ^3.3.1
-  flutter_callkit_incoming: ^3.0.0
-  wakelock_plus: ^1.5.2
   permission_handler: ^12.0.1
   vibration: ^3.1.8
   uuid: ^4.5.3
@@ -30,14 +28,17 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   firebase_core: ^4.12.1
   firebase_auth: ^6.5.6
+  device_info_plus: ^13.3.0
   mapbox_maps_flutter: ^2.26.0
   geolocator: ^14.0.2
   flutter_dotenv: ^5.2.1
+  flutter_svg: ^2.2.3
   rflutter_alert: ^2.0.7
   flutter_local_notifications: ^22.2.0
   app_links: ^7.0.0
   audioplayers: ^6.6.0
   record: ^6.2.0
+  web_socket_channel: ^3.0.3
   change_app_package_name: ^1.5.0
 
 dev_dependencies:
@@ -52,9 +53,11 @@ flutter:
   generate: true
 
   assets:
+    - .env.local
     - .env.staging
     - .env.production
     - assets/images/
+    - assets/images/figma/
     - assets/images/icons/
     - assets/images/icons/navbar/
     - assets/images/maps/

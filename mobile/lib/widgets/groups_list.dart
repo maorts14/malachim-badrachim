@@ -83,6 +83,5 @@ class _GroupsListState extends State<GroupsList> {
       groups.clear();
       groups.addAll(groupsResult);
     });
-    print('Fetched groups: $groupsResult');
   }
 }

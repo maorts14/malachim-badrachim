@@ -8,6 +8,7 @@ import 'package:rescue_app/screens/home_screen.dart';
 import 'package:rescue_app/screens/forgot_password_screen.dart';
 import 'package:rescue_app/screens/sign_in_screen.dart';
 import 'package:rescue_app/screens/sign_up_screen.dart';
+import 'package:rescue_app/screens/event_detail_screen.dart';
 
 class AppRoutePaths {
   const AppRoutePaths._();
@@ -95,6 +96,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutePaths.forgotPassword,
       builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/events/:id',
+      builder: (context, state) => EventDetailLoaderScreen(
+        eventId: int.parse(state.pathParameters['id']!),
+      ),
     ),
   ],
   redirect: (context, state) {

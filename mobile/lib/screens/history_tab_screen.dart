@@ -109,13 +109,10 @@ class _HistoryTabScreenState extends State<HistoryTabScreen> {
     RestApiService api = RestApiService();
     try {
       final messagesResult = await api.getMessages();
-      print('messages: $messages');
       setState(() {
         messages.clear();
         messages.addAll(messagesResult);
       });
-    } catch (e) {
-      print('error fetching user details: $e');
-    }
+    } catch (_) {}
   }
 }

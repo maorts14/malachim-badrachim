@@ -271,16 +271,11 @@ class RestApiService {
       });
 
       final response = await _dio.post('/api/message/', data: data);
-      if (response.data == null || response.data is! List) {
+      if (response.data == null || response.data is! Map<String, dynamic>) {
         debugPrint('postMessage error: Unexpected response format');
         return const [];
       }
-      final messageList = _asList(response.data);
-      final messages = messageList
-          .map((item) => Message.fromJson(item as Map<String, dynamic>))
-          .toList();
-
-      return messages;
+      return [Message.fromJson(response.data as Map<String, dynamic>)];
     } on DioException catch (e) {
       debugPrint('postMessage error: ${e.message}');
       return const [];
@@ -429,6 +424,11 @@ class RestApiService {
         'longitude': longitude,
       },
     );
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      throw StateError(_apiErrorMessage(response.data));
+    }
     return _asMap(response.data);
   }
 
@@ -530,8 +530,14 @@ class RestApiService {
   //   return _asMap(response.data);
   // }
 
-  Future<List<dynamic>> listMessages() async {
-    final response = await _safeGet('/api/message/');
+  Future<List<dynamic>> listMessages({int? alertId, int? groupId}) async {
+    final response = await _safeGet(
+      '/api/message/',
+      queryParameters: <String, dynamic>{
+        if (alertId != null) 'alert': alertId,
+        if (groupId != null) 'group': groupId,
+      },
+    );
     return _asList(response.data);
   }
 
@@ -541,6 +547,8 @@ class RestApiService {
     dynamic voiceFile,
     double? latitude,
     double? longitude,
+    int? alertId,
+    int? groupId,
   }) async {
     final payload = await _buildMessagePayload(
       title: title,
@@ -550,7 +558,20 @@ class RestApiService {
       longitude: longitude,
     );
 
+    if (payload is Map<String, dynamic>) {
+      if (alertId != null) payload['alert'] = alertId;
+      if (groupId != null) payload['group'] = groupId;
+    } else if (payload is FormData) {
+      if (alertId != null) payload.fields.add(MapEntry('alert', '$alertId'));
+      if (groupId != null) payload.fields.add(MapEntry('group', '$groupId'));
+    }
+
     final response = await _safePost('/api/message/', data: payload);
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      throw StateError(_apiErrorMessage(response.data));
+    }
     return _asMap(response.data);
   }
 
@@ -659,6 +680,11 @@ class RestApiService {
 
   Future<List<AlertMessage>> getAllAlerts() async {
     final response = await _safeGet('/api/alerts/');
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      throw StateError(_apiErrorMessage(response.data));
+    }
     final alertsResult = _asList(response.data);
     final alerts =
         alertsResult.map((json) => AlertMessage.fromJson(json)).toList();
@@ -690,6 +716,34 @@ class RestApiService {
   Future<Map<String, dynamic>> getAlert(int id) async {
     final response = await _safeGet('/api/alerts/$id/');
     return _asMap(response.data);
+  }
+
+  Future<AlertMessage> respondToAlert({
+    required int id,
+    required String response,
+  }) async {
+    final result = await _safePost(
+      '/api/alerts/$id/respond/',
+      data: <String, dynamic>{'response': response},
+    );
+    if (result.statusCode == null || result.statusCode! >= 400) {
+      throw StateError(_apiErrorMessage(result.data));
+    }
+    return AlertMessage.fromJson(_asMap(result.data));
+  }
+
+  Future<AlertMessage> dispatchAlert({
+    required int id,
+    required List<int> userIds,
+  }) async {
+    final result = await _safePost(
+      '/api/alerts/$id/dispatch/',
+      data: <String, dynamic>{'user_ids': userIds},
+    );
+    if (result.statusCode == null || result.statusCode! >= 400) {
+      throw StateError(_apiErrorMessage(result.data));
+    }
+    return AlertMessage.fromJson(_asMap(result.data));
   }
 
   Future<Map<String, dynamic>> updateAlert({
@@ -983,6 +1037,13 @@ class RestApiService {
 
   Message _emptyAppMessage() {
     return Message.empty();
+  }
+
+  String _apiErrorMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return data.values.join(' ');
+    }
+    return data?.toString() ?? 'הפעולה נכשלה. נסו שוב.';
   }
 
   Map<String, dynamic> _asMap(dynamic data) {

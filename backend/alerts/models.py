@@ -5,10 +5,17 @@ from django.contrib.gis.geos import Point
 
 
 class UserProfile(models.Model):
+    class Role(models.TextChoices):
+        MANAGER = 'manager', 'Manager'
+        EMERGENCY_DISPATCHER = 'emergency_dispatcher', 'Emergency dispatcher'
+        USER = 'user', 'Volunteer'
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    display_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=32, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
-    role = models.CharField(max_length=50, default='user')  # e.g., 'user', 'admin', 'rescuer'
+    role = models.CharField(max_length=50, choices=Role.choices, default=Role.USER)
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"
@@ -24,6 +31,20 @@ class Group(models.Model):
 
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    alert = models.ForeignKey(
+        'Alert',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='messages',
+    )
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='messages',
+    )
     title = models.CharField(max_length=255)
     text = models.TextField(blank=True)
     voice_file = models.FileField(upload_to='voices/', null=True, blank=True)
@@ -108,3 +129,48 @@ class Alert(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.status})"
+
+
+class AlertAssignment(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending response'
+        ACCEPTED = 'ACCEPTED', 'Accepted'
+        DECLINED = 'DECLINED', 'Declined'
+        ARRIVED = 'ARRIVED', 'Arrived on scene'
+
+    alert = models.ForeignKey(
+        Alert,
+        on_delete=models.CASCADE,
+        related_name='assignments',
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='alert_assignments',
+    )
+    dispatched_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='dispatched_alert_assignments',
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    dispatched_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['alert', 'user'],
+                name='unique_alert_assignment_per_user',
+            ),
+        ]
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'{self.alert_id} -> {self.user_id} ({self.status})'

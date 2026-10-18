@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,7 +52,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
   @override
   void dispose() {
     _authSub?.cancel();
-    // _appRouter.dispose();
     unawaited(_messageRepository.dispose());
     unawaited(_audioService.dispose());
     unawaited(_deepLinkService.dispose());
@@ -61,15 +61,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
   }
 
   Future<void> _bootstrap() async {
-    // _authSub = _authService.authStateChanges.listen((user) async {
-    //   if (user == null) return;
-    //   final token = await user.getIdToken();
-    //   if (token != null) {
-    //     await _apiClient.setAccessAuthToken(access: token);
-    //   }
-    //   await _notificationService.registerCurrentToken();
-    // });
-
     try {
       _authService = AuthService();
       _deepLinkService = DeepLinkService();
@@ -90,13 +81,23 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
       _groupRepository = GroupRepository(apiClient: _apiClient);
       await _notificationService.initialize();
 
+      _deepLinkService.linkStream.listen((route) {
+        if (route != null && FirebaseAuth.instance.currentUser != null) {
+          appRouter.go(route);
+        }
+      });
+
       _authSub = _authService.authStateChanges.listen((user) async {
-        if (user == null) return;
+        if (user == null) {
+          _messageRepository.stopPolling();
+          return;
+        }
         final token = await user.getIdToken();
         if (token != null) {
           await _apiClient.setAccessAuthToken(access: token);
         }
         await _notificationService.registerCurrentToken();
+        _messageRepository.startPolling();
       });
     } catch (e) {
       debugPrint('Notification setup skipped: $e');

@@ -1,15 +1,11 @@
-import 'package:curved_labeled_navigation_bar/curved_navigation_bar.dart';
-import 'package:curved_labeled_navigation_bar/curved_navigation_bar_item.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:rescue_app/domain/services/api/rest_api_service.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rescue_app/managers/storage_manager.dart';
 import 'package:rescue_app/repositories/location_repository.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
-import 'package:rescue_app/constants/asset_paths.dart';
 import 'event_tab_screen.dart';
 import 'about_screen.dart';
-import 'history_tab_screen.dart';
 import 'map_tab_screen.dart';
 import 'ptt_tab_screen.dart';
 import 'settings_screen.dart';
@@ -39,42 +35,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   static const List<String> _titles = <String>[
-    'משתמשים',
-    'אירועים',
-    'PTT',
-    'היסטוריה',
+    'אירועים פעילים',
     'מפה',
-  ];
-
-  static const List<CurvedNavigationBarItem> _items = <CurvedNavigationBarItem>[
-    CurvedNavigationBarItem(
-      child: Icon(Icons.people),
-      label: 'משתמשים',
-    ),
-    CurvedNavigationBarItem(
-      child: Icon(Icons.warning),
-      label: 'אירועים',
-    ),
-    CurvedNavigationBarItem(
-      child: Icon(Icons.mic),
-      label: 'PTT',
-    ),
-    CurvedNavigationBarItem(
-      child: Icon(Icons.history),
-      label: 'היסטוריה',
-    ),
-    CurvedNavigationBarItem(
-      child: Icon(Icons.map),
-      label: 'מפה',
-    ),
+    'קשר',
+    'אנשי קשר',
+    'הגדרות',
   ];
 
   static const List<Widget> _screens = <Widget>[
-    UsersTabScreen(),
     EventTabScreen(),
-    PttTabScreen(),
-    HistoryTabScreen(),
     MapTabScreen(),
+    PttTabScreen(),
+    UsersTabScreen(),
+    SettingsScreen(),
   ];
 
   // @override
@@ -85,26 +58,68 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_titles[_selectedIndex])),
-      drawer: _buildDrawer(context),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF6F7F4),
+        body: Column(
+          children: [
+            _FigmaHeader(
+              title: _titles[_selectedIndex],
+              onProfilePressed: () => _showQuickActions(context),
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: _screens,
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _FigmaBottomNavigation(
+          selectedIndex: _selectedIndex,
+          onSelected: (index) => setState(() => _selectedIndex = index),
+        ),
       ),
-      bottomNavigationBar: CurvedNavigationBar(
-        index: _selectedIndex,
-        items: _items,
-        // color: Colors.purple.shade300,
-        // buttonBackgroundColor: Colors.deepPurple,
-        // backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        animationDuration: const Duration(milliseconds: 300),
-        height: 78,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+    );
+  }
+
+  void _showQuickActions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('פרטי משתמש'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const UserDetailsScreen()));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('אודות'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AboutScreen()));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Color(0xFFD43A2F)),
+                title: const Text('התנתקות', style: TextStyle(color: Color(0xFFD43A2F))),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showLogoutAlert(context);
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -142,105 +157,125 @@ class _HomeScreenState extends State<HomeScreen> {
     ).show();
   }
 
-  Widget _buildDrawer(BuildContext context) {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-            ),
+}
+
+class _FigmaHeader extends StatelessWidget {
+  const _FigmaHeader({required this.title, required this.onProfilePressed});
+
+  final String title;
+  final VoidCallback onProfilePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF16233A),
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 116,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.white,
-                  child: ClipOval(
-                    child: Image.asset(
-                      AssetPaths.appLogo,
-                      height: 74,
-                      width: 74,
-                      fit: BoxFit.cover,
-                    ),
+                SizedBox(
+                  height: 60,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      InkWell(
+                        onTap: onProfilePressed,
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(color: Color(0x1AFFFFFF), shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: SvgPicture.asset('assets/images/figma/figma_icon_10.svg', width: 20, height: 20),
+                        ),
+                      ),
+                      Image.asset('assets/images/figma/raw_image_2.png', width: 81, height: 60, fit: BoxFit.contain),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'מלאכים בדרכים',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 23, height: 1.35)),
                   ),
                 ),
               ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('הגדרות'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SettingsScreen(),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.person),
-            title: const Text('פרטי משתמש'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const UserDetailsScreen(),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.info),
-            title: const Text('אודות'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AboutScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text(
-              'התנתקות',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+        ),
+      ),
+    );
+  }
+}
+
+class _FigmaBottomNavigation extends StatelessWidget {
+  const _FigmaBottomNavigation({required this.selectedIndex, required this.onSelected});
+
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  static const _items = <({String label, String asset})>[
+    (label: 'אירועים', asset: 'assets/images/figma/figma_icon_12.svg'),
+    (label: 'מפה', asset: 'assets/images/figma/figma_icon_9.svg'),
+    (label: 'קשר', asset: 'assets/images/figma/figma_icon_11.svg'),
+    (label: 'אנשי קשר', asset: 'assets/images/figma/figma_icon_2.svg'),
+    (label: 'הגדרות', asset: 'assets/images/figma/figma_icon_7.svg'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 72,
+      decoration: const BoxDecoration(
+        color: Color(0xFF16233A),
+        border: Border(top: BorderSide(color: Color(0x1AFFFFFF))),
+      ),
+      child: Row(
+        children: [
+          for (var index = 0; index < _items.length; index++)
+            Expanded(
+              child: InkWell(
+                onTap: () => onSelected(index),
+                child: _NavItem(item: _items[index], selected: index == selectedIndex),
               ),
             ),
-            onTap: () {
-              _showLogoutAlert(context);
-            },
-          ),
         ],
       ),
     );
   }
+}
 
-  Future testApi() async {
-    RestApiService api = RestApiService();
-    try {
-      final users = await api.getAllUsersLocation();
-      print('users with coordinates: $users');
-    } catch (e) {
-      print('error fetching user details: $e');
-    }
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.item, required this.selected});
+
+  final ({String label, String asset}) item;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        if (selected) Container(width: 36, height: 3, decoration: BoxDecoration(color: const Color(0xFF128A5E), borderRadius: BorderRadius.circular(8))),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SvgPicture.asset(item.asset, width: 23, height: 23),
+                const SizedBox(height: 4),
+                Text(item.label, style: TextStyle(color: selected ? Colors.white : const Color(0x8CFFFFFF), fontSize: 11, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -3,7 +3,15 @@ from django.contrib.gis.geos import Point
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import Alert, DeviceRegistration, UserProfile, Group, Message, Notification
+from .models import (
+    Alert,
+    AlertAssignment,
+    DeviceRegistration,
+    UserProfile,
+    Group,
+    Message,
+    Notification,
+)
 
 
 class DeviceRegistrationSerializer(serializers.Serializer):
@@ -14,12 +22,26 @@ class DeviceRegistrationSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    # `id` identifies the profile row.  Dispatch endpoints intentionally accept
+    # Django account IDs, so clients need this explicit field rather than
+    # assuming those two primary keys happen to match.
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
 
     class Meta:
         model = UserProfile
-        fields = ['id', 'username', 'email', 'role', 'latitude', 'longitude']
+        fields = [
+            'id',
+            'user_id',
+            'username',
+            'email',
+            'display_name',
+            'phone',
+            'role',
+            'latitude',
+            'longitude',
+        ]
         read_only_fields = ['id']
 
 
@@ -34,12 +56,20 @@ class GroupSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     sender = serializers.SerializerMethodField()
     voice_url = serializers.SerializerMethodField()
+    alert = serializers.PrimaryKeyRelatedField(
+        queryset=Alert.objects.all(), required=False, allow_null=True,
+    )
+    group = serializers.PrimaryKeyRelatedField(
+        queryset=Group.objects.all(), required=False, allow_null=True,
+    )
 
     class Meta:
         model = Message
         fields = [
             'id',
             'sender',
+            'alert',
+            'group',
             'title',
             'text',
             'voice_file',
@@ -85,6 +115,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 class AlertSerializer(serializers.ModelSerializer):
     latitude = serializers.FloatField()
     longitude = serializers.FloatField()
+    assignments = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Alert
@@ -98,8 +129,37 @@ class AlertSerializer(serializers.ModelSerializer):
             "priority",
             "created_at",
             "updated_at",
+            "assignments",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    @extend_schema_field({
+        'type': 'array',
+        'items': {
+            'type': 'object',
+            'properties': {
+                'user_id': {'type': 'integer'},
+                'username': {'type': 'string'},
+                'status': {'type': 'string'},
+                'dispatched_at': {'type': 'string', 'format': 'date-time'},
+                'responded_at': {'type': 'string', 'format': 'date-time', 'nullable': True},
+            },
+        },
+    })
+    def get_assignments(self, obj):
+        assignments = getattr(obj, '_prefetched_assignments', None)
+        if assignments is None:
+            assignments = obj.assignments.select_related('user').all()
+        return [
+            {
+                'user_id': assignment.user_id,
+                'username': assignment.user.username,
+                'status': assignment.status,
+                'dispatched_at': assignment.dispatched_at,
+                'responded_at': assignment.responded_at,
+            }
+            for assignment in assignments
+        ]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

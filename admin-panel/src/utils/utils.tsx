@@ -1,6 +1,7 @@
 
 
-export function Timestamp({ value }: { value: any}) {
+/* eslint-disable react-refresh/only-export-components */
+export function Timestamp({ value }: { value: string }) {
   const parts = value.split(" ");
   if (parts.length === 2) {
     return (
@@ -13,7 +14,7 @@ export function Timestamp({ value }: { value: any}) {
 }
 
 /* ── Status ── */
-export function StatusCell({ status }: { status: any }) {
+export function StatusCell({ status }: { status: string }) {
   if (status === "לא פעיל") {
     return <span className="situation__status--inactive">{status}</span>;
   }

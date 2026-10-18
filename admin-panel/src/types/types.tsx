@@ -134,5 +134,5 @@ export interface Alert {
   severity?: 'low' | 'medium' | 'high' | 'critical';
   timestamp: string;
   read?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }

@@ -8,6 +8,8 @@ db.sqlite3
 
 # Environment variables
 .env
+.env.local
+mobile/.env.local
 
 # Secrets
 backend/firebase-service-account.json

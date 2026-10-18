@@ -18,14 +18,21 @@ class DeepLinkService {
   Future<void> _init() async {
     final initialLink = await _appLinks.getInitialLink();
     if (initialLink != null) {
-      _pendingRoute = initialLink.path;
+      _pendingRoute = _routeFromUri(initialLink);
       _links.add(_pendingRoute);
     }
 
     _sub = _appLinks.uriLinkStream.listen((uri) {
-      _pendingRoute = uri.path;
+      _pendingRoute = _routeFromUri(uri);
       _links.add(_pendingRoute);
     });
+  }
+
+  String _routeFromUri(Uri uri) {
+    if (uri.host == 'events' && uri.pathSegments.isNotEmpty) {
+      return '/events/${uri.pathSegments.first}';
+    }
+    return uri.path;
   }
 
   void setPendingRoute(String route) {

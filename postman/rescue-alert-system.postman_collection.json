@@ -188,7 +188,7 @@
     },
     {
       "name": "Alerts",
-      "description": "Create and manage rescue alerts. All requests inherit the collection Bearer token.\n\n**Status values:** `OPEN` → `DISPATCHED` → `ACCEPTED` → `IN_PROGRESS` → `RESOLVED` / `CANCELLED`\n\n**Priority values:** `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`\n\n**Coordinates:** `latitude` must be −90 to 90, `longitude` must be −180 to 180. Both must be provided together on updates.",
+      "description": "Create and manage rescue alerts. All requests inherit the collection Bearer token. Managers and emergency dispatchers create, update, delete, and dispatch alerts; volunteers can only respond to their own assignment.\n\n**Status values:** `OPEN` → `DISPATCHED` → `ACCEPTED` → `IN_PROGRESS` → `RESOLVED` / `CANCELLED`\n\n**Priority values:** `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`\n\n**Coordinates:** `latitude` must be −90 to 90, `longitude` must be −180 to 180. Both must be provided together on updates.",
       "item": [
         {
           "name": "List Alerts",
@@ -343,6 +343,26 @@
           ]
         },
         {
+          "name": "Dispatch Alert",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"user_ids\": [2, 3]\n}" },
+            "url": { "raw": "{{base_url}}/api/alerts/{{alert_id}}/dispatch/", "host": ["{{base_url}}"], "path": ["api", "alerts", "{{alert_id}}", "dispatch", ""] },
+            "description": "Dispatcher-only. Assign one or more volunteer user IDs and send them a best-effort FCM notification."
+          }
+        },
+        {
+          "name": "Respond to Alert Assignment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"response\": \"accept\"\n}" },
+            "url": { "raw": "{{base_url}}/api/alerts/{{alert_id}}/respond/", "host": ["{{base_url}}"], "path": ["api", "alerts", "{{alert_id}}", "respond", ""] },
+            "description": "Assigned volunteer only. Valid responses are `accept`, `decline`, and `arrive`; arrival requires prior acceptance."
+          }
+        },
+        {
           "name": "Get Nearby Alerts",
           "request": {
             "method": "GET",
@@ -356,7 +376,7 @@
                 { "key": "radius", "value": "5000", "description": "Search radius in meters (integer, required)" }
               ]
             },
-            "description": "Returns all alerts within `radius` meters of the given coordinates. All three query params are required. Uses Euclidean approximation (`lat_diff * 111000` and `lon_diff * 111000 * cos(lat)`)."
+            "description": "Returns operational alerts within `radius` meters of the given coordinates using the database spatial distance query. All three query params are required."
           },
           "response": [
             {
@@ -383,7 +403,7 @@
     },
     {
       "name": "User Profiles",
-      "description": "Manage user profiles and locations. Django accounts are created automatically on first Firebase-authenticated request — there is no separate registration endpoint.\n\n**Role values:** `user` (default), `rescuer`, `admin`\n\nProfile fields exposed: `id`, `username` (Firebase UID), `email`, `role`, `latitude`, `longitude`.",
+      "description": "Manage user profiles and locations. Django accounts are created automatically on first Firebase-authenticated request — there is no separate registration endpoint.\n\n**Role values:** `user` (volunteer, default), `emergency_dispatcher`, `manager`. Only managers can change roles or administer profiles.\n\nProfile fields exposed: `id` (profile ID), `user_id` (Django account ID required by alert dispatch), `username` (Firebase UID), `email`, `display_name`, `phone`, `role`, `latitude`, `longitude`.",
       "item": [
         {
           "name": "List All User Profiles",
@@ -401,7 +421,7 @@
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "[\n  {\n    \"id\": 1,\n    \"username\": \"<firebase_uid>\",\n    \"email\": \"jdoe@example.com\",\n    \"role\": \"rescuer\",\n    \"latitude\": 40.7128,\n    \"longitude\": -74.006\n  }\n]"
+              "body": "[\n  {\n    \"id\": 8,\n    \"user_id\": 42,\n    \"username\": \"<firebase_uid>\",\n    \"email\": \"jdoe@example.com\",\n    \"display_name\": \"דנה\",\n    \"phone\": \"+972501234567\",\n    \"role\": \"user\",\n    \"latitude\": 40.7128,\n    \"longitude\": -74.006\n  }\n]"
             }
           ]
         },
@@ -788,7 +808,7 @@
     },
     {
       "name": "Messages",
-      "description": "Send and retrieve field messages. Supports text-only or text + voice file attachment.\n\n`sender` is set automatically from the authenticated token — do not include it in request bodies.\n\nVoice files are served from `/media/voices/` and accessible via the `voice_url` field in responses.",
+      "description": "Send and retrieve field messages. Supports text-only or text + voice file attachment.\n\nUse `alert` to make an incident-scoped operational thread, or `group` for a group thread. A volunteer can only read or post in alerts assigned to them and groups they belong to; dispatchers can coordinate across contexts.\n\n`sender` is set automatically from the authenticated token — do not include it in request bodies.\n\nVoice files are served from `/media/voices/` and accessible via the `voice_url` field in responses.",
       "item": [
         {
           "name": "List Messages",
@@ -799,7 +819,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "message", ""]
             },
-            "description": "Returns all messages (default ordering)."
+            "description": "Returns messages visible to the authenticated user. Add `?alert={{alert_id}}` or `?group={{group_id}}` to retrieve one operational thread."
           },
           "response": [
             {
@@ -831,14 +851,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Evacuation Update\",\n  \"text\": \"Sector 3 is clear. All units proceed to sector 4.\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}"
+              "raw": "{\n  \"alert\": {{alert_id}},\n  \"title\": \"Evacuation Update\",\n  \"text\": \"Sector 3 is clear. All units proceed to sector 4.\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/message/",
               "host": ["{{base_url}}"],
               "path": ["api", "message", ""]
             },
-            "description": "Create a text message. `text`, `latitude`, and `longitude` are optional. `sender` is set from the token."
+            "description": "Create a text message in the selected alert context. Use either optional `alert` or `group` when creating a contextual thread; `text`, `latitude`, and `longitude` are optional. `sender` is set from the token."
           },
           "response": [
             {

@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+backend/firebase-service-account.json
+backend/*service-account*.json
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+mobile/macos/Runner/GoogleService-Info.plist
+admin-panel/node_modules
+admin-panel/dist
+mobile/build

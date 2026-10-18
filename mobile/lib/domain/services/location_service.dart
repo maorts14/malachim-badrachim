@@ -4,7 +4,6 @@ import 'package:geolocator/geolocator.dart';
 
 class LocationService {
   StreamSubscription<Position>? _positionSubscription;
-  Position? _lastPosition;
 
   Future<Position?> startTracking() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -12,9 +11,13 @@ class LocationService {
       return null;
     }
 
-    final permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      await Geolocator.requestPermission();
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
     }
 
     return Geolocator.getCurrentPosition(
@@ -26,7 +29,7 @@ class LocationService {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 10,
+        distanceFilter: 50,
       ),
     );
   }

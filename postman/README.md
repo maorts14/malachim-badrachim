@@ -50,7 +50,7 @@ If your token expires, run **Authentication → Refresh Access Token**.
 | Folder | # Requests | Description |
 |---|---|---|
 | Authentication | 2 | Login, Refresh Token |
-| Alerts | 7 | Full CRUD + nearby geosearch |
+| Alerts | 9 | Full CRUD, nearby geosearch, dispatch, and volunteer response |
 | User Profiles | 8 | Full CRUD + location update + my profile |
 | Groups | 7 | Full CRUD + add/remove members |
 | Messages | 8 | Full CRUD + voice attachments + newest-first list |
@@ -84,7 +84,16 @@ The **Device Registration** endpoint is the only exception — it uses a **Fireb
 `LOW` · `MEDIUM` · `HIGH` · `CRITICAL`
 
 ### User Role Values
-`user` · `admin` · `rescuer`
+`user` (volunteer) · `emergency_dispatcher` · `manager`
+
+### Dispatch and response
+
+Only `manager` and `emergency_dispatcher` roles can create, edit, delete, or
+dispatch alerts. Dispatch uses `POST /api/alerts/{id}/dispatch/` with a
+non-empty `user_ids` integer array. A dispatched volunteer uses
+`POST /api/alerts/{id}/respond/` with `accept`, `decline`, or `arrive`.
+`arrive` is valid only after acceptance. The returned alert always includes its
+current assignment records and lifecycle status.
 
 ### Device Platform Values
 `android` · `ios` · `other`

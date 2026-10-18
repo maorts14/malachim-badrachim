@@ -1,17 +1,30 @@
-import math
-
 from django.contrib.auth.models import User
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
+from django.db.models import Prefetch, Q
+from django.db import transaction
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import firebase_admin.auth
 
-from .models import Alert, DeviceRegistration, UserProfile, Group, Message, Notification
+from .models import (
+    Alert,
+    AlertAssignment,
+    DeviceRegistration,
+    UserProfile,
+    Group,
+    Message,
+    Notification,
+)
+from .notifications import send_alert_assignment_notification
+from .permissions import IsDispatcher, IsManager, is_dispatcher
+from .realtime import publish_message_created
 from .serializers import (
     AlertSerializer, DeviceRegistrationSerializer,
     UserProfileSerializer, GroupSerializer, MessageSerializer, NotificationSerializer,
@@ -87,6 +100,13 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_permissions(self):
+        if self.action in {'create', 'destroy'}:
+            return [IsManager()]
+        if self.action in {'update', 'partial_update'}:
+            return [IsManager()]
+        return [IsAuthenticated()]
+
     @action(detail=False, methods=['post'])
     def location(self, request):
         profile = request.user.userprofile
@@ -110,7 +130,16 @@ class UserProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['put'])
     def update_profile(self, request):
-        serializer = self.get_serializer(request.user.userprofile, data=request.data, partial=True)
+        mutable_fields = {
+            key: value
+            for key, value in request.data.items()
+            if key in {'display_name', 'phone', 'latitude', 'longitude'}
+        }
+        serializer = self.get_serializer(
+            request.user.userprofile,
+            data=mutable_fields,
+            partial=True,
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -121,6 +150,16 @@ class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in {'create', 'update', 'partial_update', 'destroy', 'add_user', 'remove_user'}:
+            return [IsManager()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        if is_dispatcher(self.request.user):
+            return Group.objects.all()
+        return Group.objects.filter(members=self.request.user)
 
     @action(detail=True, methods=['post'])
     def add_user(self, request, pk=None):
@@ -142,16 +181,49 @@ class GroupViewSet(viewsets.ModelViewSet):
 
 
 class MessageViewSet(viewsets.ModelViewSet):
-    queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = Message.objects.select_related('sender', 'alert', 'group')
+        if is_dispatcher(self.request.user):
+            visible = queryset
+        else:
+            visible = queryset.filter(
+                Q(sender=self.request.user)
+                | Q(group__members=self.request.user)
+                | Q(alert__assignments__user=self.request.user),
+            ).distinct()
+        alert_id = self.request.query_params.get('alert')
+        group_id = self.request.query_params.get('group')
+        if alert_id:
+            visible = visible.filter(alert_id=alert_id)
+        if group_id:
+            visible = visible.filter(group_id=group_id)
+        return visible
+
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+        alert = serializer.validated_data.get('alert')
+        group = serializer.validated_data.get('group')
+        if not is_dispatcher(self.request.user):
+            if alert and not AlertAssignment.objects.filter(
+                alert=alert,
+                user=self.request.user,
+                status__in=[
+                    AlertAssignment.Status.PENDING,
+                    AlertAssignment.Status.ACCEPTED,
+                    AlertAssignment.Status.ARRIVED,
+                ],
+            ).exists():
+                raise PermissionDenied('You are not assigned to this alert.')
+            if group and not group.members.filter(id=self.request.user.id).exists():
+                raise PermissionDenied('You are not a member of this group.')
+        message = serializer.save(sender=self.request.user)
+        transaction.on_commit(lambda: publish_message_created(message.id))
 
     @action(detail=False, methods=['get'])
     def list_messages(self, request):
-        messages = Message.objects.all().order_by('-timestamp')
+        messages = self.filter_queryset(self.get_queryset()).order_by('-timestamp')
         return Response(self.get_serializer(messages, many=True).data)
 
 
@@ -165,9 +237,155 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
 
 class AlertViewSet(viewsets.ModelViewSet):
-    queryset = Alert.objects.all()
     serializer_class = AlertSerializer
     permission_classes = [IsAuthenticated]
+
+    def _queryset_with_assignments(self):
+        return Alert.objects.prefetch_related(
+            Prefetch(
+                'assignments',
+                queryset=AlertAssignment.objects.select_related('user'),
+                to_attr='_prefetched_assignments',
+            ),
+        )
+
+    def get_queryset(self):
+        queryset = self._queryset_with_assignments()
+        # These actions are already guarded by IsDispatcher. Resolving their
+        # target from the full set avoids applying volunteer assignment filters
+        # while DRF is still authenticating the request.
+        if getattr(self, 'action', None) in {
+            'update', 'partial_update', 'destroy', 'dispatch_alert',
+        }:
+            return queryset
+        if is_dispatcher(self.request.user):
+            return queryset
+        return queryset.filter(
+            assignments__user=self.request.user,
+        ).exclude(
+            assignments__user=self.request.user,
+            assignments__status=AlertAssignment.Status.DECLINED,
+        ).distinct()
+
+    def get_permissions(self):
+        if self.action in {
+            'create', 'update', 'partial_update', 'destroy', 'dispatch_alert',
+        }:
+            return [IsDispatcher()]
+        return [IsAuthenticated()]
+
+    @staticmethod
+    def _sync_alert_status(alert):
+        assignment_statuses = set(alert.assignments.values_list('status', flat=True))
+        if AlertAssignment.Status.ARRIVED in assignment_statuses:
+            next_status = Alert.Status.IN_PROGRESS
+        elif AlertAssignment.Status.ACCEPTED in assignment_statuses:
+            next_status = Alert.Status.ACCEPTED
+        elif assignment_statuses and assignment_statuses == {AlertAssignment.Status.DECLINED}:
+            next_status = Alert.Status.OPEN
+        elif assignment_statuses:
+            next_status = Alert.Status.DISPATCHED
+        else:
+            next_status = Alert.Status.OPEN
+
+        if alert.status != next_status:
+            alert.status = next_status
+            alert.save(update_fields=['status', 'updated_at'])
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'required': ['user_ids'],
+                'properties': {
+                    'user_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1},
+                },
+            },
+        },
+        responses=AlertSerializer,
+        description='Dispatch an alert to one or more volunteers. Re-dispatching resets a declined assignment to pending.',
+    )
+    @action(detail=True, methods=['post'], url_path='dispatch', url_name='dispatch')
+    def dispatch_alert(self, request, pk=None):
+        alert = self.get_object()
+        if alert.status in {Alert.Status.RESOLVED, Alert.Status.CANCELLED}:
+            raise ValidationError({'status': 'Resolved or cancelled alerts cannot be dispatched.'})
+
+        user_ids = request.data.get('user_ids')
+        if not isinstance(user_ids, list) or not user_ids:
+            raise ValidationError({'user_ids': 'Provide a non-empty list of volunteer user IDs.'})
+        try:
+            normalized_ids = {int(user_id) for user_id in user_ids}
+        except (TypeError, ValueError):
+            raise ValidationError({'user_ids': 'Every user ID must be an integer.'})
+
+        volunteers = list(
+            User.objects.filter(
+                id__in=normalized_ids,
+                userprofile__role=UserProfile.Role.USER,
+            ),
+        )
+        found_ids = {volunteer.id for volunteer in volunteers}
+        if found_ids != normalized_ids:
+            raise ValidationError({'user_ids': 'Every assignee must be an existing volunteer.'})
+
+        for volunteer in volunteers:
+            assignment, created = AlertAssignment.objects.get_or_create(
+                alert=alert,
+                user=volunteer,
+                defaults={'dispatched_by': request.user},
+            )
+            if not created and assignment.status == AlertAssignment.Status.DECLINED:
+                assignment.status = AlertAssignment.Status.PENDING
+                assignment.dispatched_by = request.user
+                assignment.responded_at = None
+                assignment.save(update_fields=['status', 'dispatched_by', 'responded_at', 'updated_at'])
+
+        self._sync_alert_status(alert)
+        send_alert_assignment_notification(
+            alert=alert,
+            user_ids=[volunteer.username for volunteer in volunteers],
+        )
+        alert.refresh_from_db()
+        return Response(self.get_serializer(alert).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'required': ['response'],
+                'properties': {
+                    'response': {'type': 'string', 'enum': ['accept', 'decline', 'arrive']},
+                },
+            },
+        },
+        responses=AlertSerializer,
+        description='Volunteer response for their own assignment. `arrive` requires a previous acceptance.',
+    )
+    @action(detail=True, methods=['post'])
+    def respond(self, request, pk=None):
+        alert = Alert.objects.get(pk=pk)
+        response_value = request.data.get('response')
+        assignment = AlertAssignment.objects.filter(alert=alert, user=request.user).first()
+        if assignment is None:
+            raise PermissionDenied('You are not assigned to this alert.')
+
+        target_status = {
+            'accept': AlertAssignment.Status.ACCEPTED,
+            'decline': AlertAssignment.Status.DECLINED,
+            'arrive': AlertAssignment.Status.ARRIVED,
+        }.get(response_value)
+        if target_status is None:
+            raise ValidationError({'response': 'Use accept, decline, or arrive.'})
+        if target_status == AlertAssignment.Status.ARRIVED and assignment.status != AlertAssignment.Status.ACCEPTED:
+            raise ValidationError({'response': 'Accept the assignment before marking arrival.'})
+
+        assignment.status = target_status
+        assignment.responded_at = timezone.now()
+        assignment.save(update_fields=['status', 'responded_at', 'updated_at'])
+        self._sync_alert_status(alert)
+        alert.refresh_from_db()
+        return Response(self.get_serializer(alert).data)
 
     @action(detail=False, methods=['get'])
     def nearby(self, request):
@@ -192,13 +410,14 @@ class AlertViewSet(viewsets.ModelViewSet):
             )
 
         user_location = Point(lon, lat, srid=4326)
-        all_alerts = Alert.objects.all()
-        alerts = []
-        for alert in all_alerts:
-            if alert.location:
-                lat_diff = abs(alert.location.y - lat) * 111000
-                lon_diff = abs(alert.location.x - lon) * 111000 * math.cos(math.radians(lat))
-                if math.sqrt(lat_diff**2 + lon_diff**2) <= radius:
-                    alerts.append(alert)
+        alerts = self._queryset_with_assignments().filter(
+            status__in=[Alert.Status.OPEN, Alert.Status.DISPATCHED, Alert.Status.ACCEPTED, Alert.Status.IN_PROGRESS],
+            location__distance_lte=(user_location, D(m=radius)),
+        )
+        if not is_dispatcher(request.user):
+            alerts = alerts.filter(
+                Q(status=Alert.Status.OPEN)
+                | Q(assignments__user=request.user),
+            ).distinct()
 
         return Response(self.get_serializer(alerts, many=True).data)

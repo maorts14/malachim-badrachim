@@ -12,7 +12,7 @@ export default function Situation() {
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
 
   // Robust parser: handles Date object, ISO string, or "DD/MM/YYYY HH:mm"
-  const parseDate = (value: any) => {
+  const parseDate = (value: unknown) => {
     if (!value) return 0;
 
     if (value instanceof Date) return value.getTime();
@@ -142,10 +142,10 @@ export default function Situation() {
                   </span>
                 </td>
                 <td className="situation__cell" data-label="עדכון אחרון">
-                  <Timestamp value={row.lastUpdate} />
+                  <Timestamp value={row.lastUpdate ?? ''} />
                 </td>
                 <td className="situation__cell" data-label="סטטוס">
-                  <StatusCell status={row.status} />
+                  <StatusCell status={row.status ?? ''} />
                 </td>
                 <td className="situation__cell" data-label="אירועים">
                   {row.event && (

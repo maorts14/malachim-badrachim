@@ -1,0 +1,96 @@
+name: Validate rescue-alert-system
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, integration]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend API contract tests
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: rescue_alert
+          POSTGRES_USER: rescue_user
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rescue_user -d rescue_alert"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DEBUG: "true"
+      SECRET_KEY: ci-not-for-production
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: rescue_alert
+      POSTGRES_USER: rescue_user
+      POSTGRES_PASSWORD: ci_only_password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install GeoDjango system dependencies
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin libgdal-dev libgeos-dev libproj-dev
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+      - name: Run Django API contract suite
+        working-directory: backend
+        run: python manage.py test alerts --verbosity 2
+
+  admin:
+    name: Admin panel lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin-panel/package-lock.json
+      - name: Install dependencies
+        working-directory: admin-panel
+        run: npm ci
+      - name: Lint
+        working-directory: admin-panel
+        run: npm run lint
+      - name: Production build
+        working-directory: admin-panel
+        run: npm run build
+      - name: Production dependency audit
+        working-directory: admin-panel
+        run: npm audit --omit=dev --audit-level=high
+
+  mobile:
+    name: Flutter analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Fetch dependencies
+        working-directory: mobile
+        run: flutter pub get
+      - name: Static analysis
+        working-directory: mobile
+        run: flutter analyze
+      - name: Unit and widget tests
+        working-directory: mobile
+        run: flutter test
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2

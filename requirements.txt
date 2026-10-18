@@ -8,3 +8,5 @@ firebase-admin
 drf-spectacular
 gunicorn
 whitenoise
+channels[daphne]
+channels_redis

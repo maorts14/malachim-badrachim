@@ -30,6 +30,7 @@ class _MapTabScreenState extends State<MapTabScreen> {
 
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _annotationManager;
+  List<UserCoordinate> _userCoordinates = const [];
   StreamSubscription<geo.Position>? _positionSubscription;
   bool _isRequestingPermission = false;
   bool _hasLocationPermission = false;
@@ -50,42 +51,17 @@ class _MapTabScreenState extends State<MapTabScreen> {
     'Light': MapboxStyles.LIGHT,
   };
 
-  // final List<UserCoordinate> userCoordinates = [];
-
-  // static const List<UserCoordinate> _mockUsers = [
-  //   UserCoordinate(
-  //       id: 1,
-  //       latitude: 32.0900,
-  //       longitude: 34.7850,
-  //       username: 'Alice',
-  //       role: 'rescuer'),
-  //   UserCoordinate(
-  //       id: 2,
-  //       latitude: 32.0820,
-  //       longitude: 34.7780,
-  //       username: 'Bob',
-  //       role: 'dispatcher'),
-  //   UserCoordinate(
-  //       id: 3,
-  //       latitude: 32.0760,
-  //       longitude: 34.7910,
-  //       username: 'Carol',
-  //       role: 'rescuer'),
-  // ];
-
-  // final users = <UserDetails>[];
-
   bool get _hasToken => _mapboxToken.trim().isNotEmpty;
 
   @override
   void initState() {
-    getUsers();
     super.initState();
     if (_hasToken) {
       MapboxOptions.setAccessToken(_mapboxToken);
     }
     _restoreLastCamera();
     _initializeLocationFlow();
+    _loadUserMarkers();
   }
 
   @override
@@ -117,7 +93,7 @@ class _MapTabScreenState extends State<MapTabScreen> {
       setState(() {
         _hasLocationPermission = false;
         _permissionMessage =
-            'Location service is disabled. Please enable location services.';
+            'שירותי המיקום כבויים. יש להפעיל אותם כדי להשתמש במפה.';
       });
       _isRequestingPermission = false;
       return false;
@@ -136,8 +112,8 @@ class _MapTabScreenState extends State<MapTabScreen> {
       _hasLocationPermission = granted;
       if (!granted) {
         _permissionMessage = permission == geo.LocationPermission.deniedForever
-            ? 'Location permission is permanently denied. Please enable it from settings.'
-            : 'Location permission denied.';
+            ? 'הגישה למיקום נחסמה. אפשרו אותה בהגדרות המכשיר.'
+            : 'לא אושרה גישה למיקום.';
       }
     });
 
@@ -256,23 +232,23 @@ class _MapTabScreenState extends State<MapTabScreen> {
     }
 
     _annotationManager = await map.annotations.createPointAnnotationManager();
+    await _renderUserMarkers(_userCoordinates);
+  }
 
-    // List<UserCoordinate> users;
-    // try {
-    //   final List<dynamic> raw =
-    //       await RestApiService().listUsersWithCoordinates();
-    //   users = raw
-    //       .whereType<Map<String, dynamic>>()
-    //       .map(UserCoordinate.fromJson)
-    //       .toList();
-
-    //   await _renderUserMarkers(users);
-    //   // if (users.isEmpty) {
-    //   //   users = userCoordinates;
-    //   // }
-    // } catch (_) {
-    //   // users = userCoordinates;
-    // }
+  Future<void> _loadUserMarkers() async {
+    try {
+      final users = await RestApiService().getAllUsers();
+      final coordinates = users
+          .where((user) => user.latitude != null && user.longitude != null)
+          .map((user) => user.coordinates)
+          .toList(growable: false);
+      if (!mounted) return;
+      setState(() => _userCoordinates = coordinates);
+      await _renderUserMarkers(coordinates);
+    } catch (_) {
+      // Current location and map controls stay usable when the responder
+      // directory is temporarily unavailable.
+    }
   }
 
   Future<void> _renderUserMarkers(List<UserCoordinate> users) async {
@@ -299,9 +275,6 @@ class _MapTabScreenState extends State<MapTabScreen> {
             ),
             image: markerBytes,
             iconSize: 2,
-            textField: u.username ?? 'User ${u.id}',
-            textOffset: [0, 2.0],
-            textSize: 12,
           ),
         )
         .toList();
@@ -320,7 +293,7 @@ class _MapTabScreenState extends State<MapTabScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'Select Map Style',
+                  'סגנון מפה',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
@@ -402,21 +375,6 @@ class _MapTabScreenState extends State<MapTabScreen> {
       longitude: position.longitude,
       zoom: zoom,
     );
-    try {
-      await RestApiService().updateCurrentUserLocation(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Location update failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   Future<void> _retryPermissionsAndTracking() async {
@@ -450,7 +408,7 @@ class _MapTabScreenState extends State<MapTabScreen> {
             children: [
               Text(
                 _permissionMessage ??
-                    'Location permission is required to track your position.',
+                    'נדרשת הרשאת מיקום כדי להציג את מיקומך במפה.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
@@ -458,7 +416,7 @@ class _MapTabScreenState extends State<MapTabScreen> {
                 onPressed: _isRequestingPermission
                     ? null
                     : _retryPermissionsAndTracking,
-                child: const Text('Grant Location Permission'),
+                child: const Text('אישור גישה למיקום'),
               ),
             ],
           ),
@@ -471,7 +429,7 @@ class _MapTabScreenState extends State<MapTabScreen> {
         MapWidget(
           key: const ValueKey('mapWidget'),
           onMapCreated: _onMapCreated,
-          cameraOptions: CameraOptions(
+          viewport: CameraViewportState(
             center: Point(
               coordinates: Position(_lastLongitude, _lastLatitude),
             ),
@@ -526,11 +484,5 @@ class _MapTabScreenState extends State<MapTabScreen> {
         ),
       ],
     );
-  }
-
-  Future<void> getUsers() async {
-    final usersResult = await RestApiService().getAllUsers();
-    final coordinateList = usersResult.map((user) => user.coordinates).toList();
-    _renderUserMarkers(coordinateList);
   }
 }

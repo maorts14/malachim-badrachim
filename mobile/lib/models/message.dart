@@ -7,8 +7,10 @@ class Message {
   final String text;
   final String? voiceFile;
   final String? voiceUrl;
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
+  final int? alertId;
+  final int? groupId;
   final DateTime timestamp;
 
   const Message({
@@ -18,8 +20,10 @@ class Message {
     required this.text,
     this.voiceFile,
     this.voiceUrl,
-    required this.latitude,
-    required this.longitude,
+    this.latitude,
+    this.longitude,
+    this.alertId,
+    this.groupId,
     required this.timestamp,
   });
 
@@ -36,8 +40,8 @@ class Message {
       text: '',
       voiceFile: null,
       voiceUrl: null,
-      latitude: 0,
-      longitude: 0,
+      latitude: null,
+      longitude: null,
       timestamp: DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -50,8 +54,10 @@ class Message {
       text: json['text'] as String,
       voiceFile: json['voice_file'] as String?,
       voiceUrl: json['voice_url'] as String?,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      alertId: json['alert'] as int?,
+      groupId: json['group'] as int?,
       timestamp: DateTime.parse(json['timestamp'] as String),
     );
   }
@@ -66,6 +72,8 @@ class Message {
       'voice_url': voiceUrl,
       'latitude': latitude,
       'longitude': longitude,
+      'alert': alertId,
+      'group': groupId,
       'timestamp': timestamp.toIso8601String(),
     };
   }

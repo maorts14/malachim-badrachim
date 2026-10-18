@@ -2,12 +2,18 @@
 import {UserCircle,} from "lucide-react";
 import "./ChatAvatar.css";
 
+type ChatAvatarItem = {
+  avatarType?: string;
+  title: string;
+  dotType?: string;
+  dotColor?: string;
+};
 
 
 
 
 // ── Chat Avatar ────────────────────────────────────────────────────────
-function ChatAvatar({ item }: any) {
+function ChatAvatar({ item }: { item: ChatAvatarItem }) {
   const isSystem = item.avatarType === "list";
 
   return (
