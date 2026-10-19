@@ -158,26 +158,19 @@ CHANNEL_LAYERS = {
 
 
 # DATABASE CONFIGURATION
-
-if config("POSTGRES_HOST", default=None):
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.contrib.gis.db.backends.postgis",
-            "NAME": config("POSTGRES_DB", default="rescue_alert"),
-            "USER": config("POSTGRES_USER", default="rescue_user"),
-            "PASSWORD": config("POSTGRES_PASSWORD", default="change_me_now"),
-            "HOST": config("POSTGRES_HOST", default="db"),
-            "PORT": config("POSTGRES_PORT", default="5432"),
-        }
+#
+# This application requires PostGIS. GIS migrations and distance queries must
+# run against the same database engine in local development, CI, and production.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.contrib.gis.db.backends.postgis",
+        "NAME": config("POSTGRES_DB"),
+        "USER": config("POSTGRES_USER"),
+        "PASSWORD": config("POSTGRES_PASSWORD"),
+        "HOST": config("POSTGRES_HOST"),
+        "PORT": config("POSTGRES_PORT", default="5432"),
     }
-else:
-    # Fallback to SQLite for local development
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 
 # PASSWORD VALIDATION

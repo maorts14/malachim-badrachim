@@ -4,6 +4,9 @@ The first local environment uses the `rescue-alert-system-local` Firebase
 project and an isolated PostGIS database. It does not access the production
 Firebase project or production database.
 
+PostGIS is mandatory for this application. SQLite is unsupported, including
+for local development and tests.
+
 ## One-time setup
 
 1. Copy `.env.local.example` to `.env.local` and choose a local-only database
@@ -28,6 +31,20 @@ docker compose --env-file .env.local -f docker-compose.local.yml up --build
 - API: `http://localhost:8004/api/`
 - Admin panel: `http://localhost:5173/`
 - Postgres (host only): `127.0.0.1:15432`
+
+## Reset the local database after the initial-schema migration reset
+
+The alert migrations are intentionally a single initial schema because no
+deployment needs an upgrade path. If you previously ran the old migration
+chain, recreate the local Compose data once before starting the stack again:
+
+```powershell
+docker compose --env-file .env.local -f docker-compose.local.yml down --volumes
+docker compose --env-file .env.local -f docker-compose.local.yml up --build
+```
+
+This removes local development data and Docker volumes; it does not affect a
+remote environment.
 
 ## Run the Android app
 

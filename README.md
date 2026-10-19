@@ -98,6 +98,10 @@ The project is containerized with Docker to make local setup simpler and more co
   <li>Docker Compose</li>
 </ul>
 
+<p><strong>PostgreSQL with PostGIS is required in every environment.</strong>
+SQLite is unsupported: local development, tests, and production all use the
+PostGIS service supplied by Docker Compose.</p>
+
 <h3>Local Setup</h3>
 
 <pre>
