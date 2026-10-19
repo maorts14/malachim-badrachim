@@ -43,10 +43,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         context.go(AppRoutePaths.signIn);
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _error = 'קישור האיפוס אינו תקין או שפג תוקפו.');
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
