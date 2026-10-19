@@ -380,6 +380,15 @@ class RestApiService {
         data: <String, dynamic>{'email': email});
   }
 
+  Future<void> confirmPasswordReset({
+    required String uid,
+    required String token,
+    required String password,
+  }) async {
+    await _safePost('/api/auth/password-reset/$uid/$token/',
+        data: <String, dynamic>{'password': password});
+  }
+
   Future<Map<String, dynamic>> whoAmI() async {
     final response = await _safeGet('/api/auth/whoami/');
     return _asMap(_asMap(response.data)['user']);

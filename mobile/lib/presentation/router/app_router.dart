@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:rescue_app/domain/services/auth_service.dart';
 import 'package:rescue_app/screens/home_screen.dart';
 import 'package:rescue_app/screens/forgot_password_screen.dart';
+import 'package:rescue_app/screens/reset_password_screen.dart';
 import 'package:rescue_app/screens/sign_in_screen.dart';
 import 'package:rescue_app/screens/sign_up_screen.dart';
 import 'package:rescue_app/screens/event_detail_screen.dart';
@@ -13,6 +14,7 @@ class AppRoutePaths {
   static const String signIn = '/sign-in';
   static const String signUp = '/sign-up';
   static const String forgotPassword = '/forgot-password';
+  static const String resetPassword = '/reset-password';
   static const String users = '/users';
   static const String events = '/events';
   static const String ptt = '/ptt';
@@ -68,6 +70,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const ForgotPasswordScreen(),
     ),
     GoRoute(
+      path: '${AppRoutePaths.resetPassword}/:uid/:token',
+      builder: (context, state) => ResetPasswordScreen(
+        uid: state.pathParameters['uid']!,
+        token: state.pathParameters['token']!,
+      ),
+    ),
+    GoRoute(
       path: '/events/:id',
       builder: (context, state) => EventDetailLoaderScreen(
         eventId: int.parse(state.pathParameters['id']!),
@@ -78,7 +87,8 @@ final GoRouter appRouter = GoRouter(
     final bool isLoggedIn = _authService.isAuthenticated;
     final bool isAuthRoute = state.matchedLocation == AppRoutePaths.signIn ||
         state.matchedLocation == AppRoutePaths.signUp ||
-        state.matchedLocation == AppRoutePaths.forgotPassword;
+        state.matchedLocation == AppRoutePaths.forgotPassword ||
+        state.matchedLocation.startsWith(AppRoutePaths.resetPassword);
 
     if (!isLoggedIn && !isAuthRoute) {
       return AppRoutePaths.signIn;

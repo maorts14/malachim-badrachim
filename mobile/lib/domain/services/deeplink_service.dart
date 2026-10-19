@@ -32,6 +32,9 @@ class DeepLinkService {
     if (uri.host == 'events' && uri.pathSegments.isNotEmpty) {
       return '/events/${uri.pathSegments.first}';
     }
+    if (uri.host == 'reset-password' && uri.pathSegments.length == 2) {
+      return '/reset-password/${uri.pathSegments[0]}/${uri.pathSegments[1]}';
+    }
     return uri.path;
   }
 
