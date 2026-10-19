@@ -54,6 +54,7 @@ class RestApiService {
               await StorageManager.instance.getJwtRefreshToken();
           if (refresh == null || refresh.isEmpty) {
             await clearTokens();
+            onSessionExpired?.call();
             handler.next(error);
             return;
           }
@@ -67,6 +68,7 @@ class RestApiService {
             handler.resolve(replay);
           } catch (_) {
             await clearTokens();
+            onSessionExpired?.call();
             handler.next(error);
           }
         },
@@ -77,6 +79,7 @@ class RestApiService {
   final Dio _dio;
   String? _accessToken;
   String? _refreshToken;
+  VoidCallback? onSessionExpired;
 
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;

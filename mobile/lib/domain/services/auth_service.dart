@@ -3,7 +3,9 @@ import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/managers/storage_manager.dart';
 
 class AuthService {
-  AuthService._();
+  AuthService._() {
+    _apiClient.onSessionExpired = () => session.value = false;
+  }
 
   static final AuthService _instance = AuthService._();
   factory AuthService() => _instance;

@@ -81,7 +81,10 @@ cookie. Firebase Messaging is used only for push delivery.
 <p>
 To enable password-reset emails, set <code>DEFAULT_FROM_EMAIL</code>, configure
 Django's email backend for the deployment, and set <code>PASSWORD_RESET_URL</code>
-to a URL template containing <code>{uid}</code> and <code>{token}</code>.
+to a URL template containing <code>{uid}</code> and <code>{token}</code>. The
+mobile app accepts <code>rescuealert://reset-password/{uid}/{token}</code> on
+Android and iOS; use that template unless a production universal/app-link
+domain is configured.
 </p>
 
 <p>

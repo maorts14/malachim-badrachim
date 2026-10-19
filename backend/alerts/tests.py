@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth.models import User
 from django.contrib.gis.geos import Point
 from django.contrib.sessions.backends.db import SessionStore
@@ -70,6 +72,15 @@ class AuthApiTests(APITestCase):
         self.assertEqual(unknown.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('https://rescue.example/reset/', mail.outbox[0].body)
+        match = re.search(r'/reset/([^/]+)/([^\s]+)', mail.outbox[0].body)
+        self.assertIsNotNone(match)
+        confirmed = self.client.post(
+            f'/api/auth/password-reset/{match.group(1)}/{match.group(2)}/',
+            {'password': 'newstrongpass123'},
+            format='json',
+        )
+        self.assertEqual(confirmed.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(User.objects.get(username='reset@example.com').check_password('newstrongpass123'))
 
 
 class AlertDispatchContractTests(APITestCase):

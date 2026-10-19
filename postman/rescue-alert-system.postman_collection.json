@@ -31,6 +31,16 @@
       "description": "JWT refresh token — auto-set by Register and Login"
     },
     {
+      "key": "reset_uid",
+      "value": "",
+      "description": "Password-reset uid from the configured reset link"
+    },
+    {
+      "key": "reset_token",
+      "value": "",
+      "description": "Password-reset token from the configured reset link"
+    },
+    {
       "key": "alert_id",
       "value": "1",
       "description": "Alert ID used in detail, update, and delete requests"
@@ -182,7 +192,8 @@
                   "const r = pm.response.json();",
                   "if (r.access) {",
                   "    pm.collectionVariables.set('access_token', r.access);",
-                  "    console.log('Django JWT access token refreshed.');",
+                  "    if (r.refresh) pm.collectionVariables.set('refresh_token', r.refresh);",
+                  "    console.log('Django JWT token pair refreshed.');",
                   "} else {",
                   "    console.error('Token refresh failed:', JSON.stringify(r));",
                   "}"
@@ -205,14 +216,14 @@
               "host": ["{{base_url}}"],
               "path": ["api", "token", "refresh", ""]
             },
-            "description": "Exchanges a valid SimpleJWT refresh token for a new access token. The test script replaces only `access_token`."
+            "description": "Exchanges a valid SimpleJWT refresh token for a new access token. Refresh-token rotation is enabled, so the test script also replaces `refresh_token` when the server returns one."
           },
           "response": [
             {
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"access\": \"<new_jwt_access_token>\"\n}"
+              "body": "{\n  \"access\": \"<new_jwt_access_token>\",\n  \"refresh\": \"<rotated_jwt_refresh_token>\"\n}"
             }
           ]
         },
@@ -233,6 +244,60 @@
               "status": "OK",
               "code": 200,
               "body": "{\n  \"authenticated\": true,\n  \"user\": {\n    \"id\": 42,\n    \"username\": \"user@example.com\",\n    \"email\": \"user@example.com\",\n    \"name\": \"Example Responder\",\n    \"role\": \"user\",\n    \"is_staff\": false\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Request Password Reset",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/password-reset/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "password-reset", ""]
+            },
+            "description": "Requests a password-reset email. The endpoint always returns 204 so it does not disclose whether an email address exists. Configure PASSWORD_RESET_URL with `{uid}` and `{token}` placeholders."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204
+            }
+          ]
+        },
+        {
+          "name": "Confirm Password Reset",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{user_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/password-reset/{{reset_uid}}/{{reset_token}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "password-reset", "{{reset_uid}}", "{{reset_token}}", ""]
+            },
+            "description": "Sets a new password from a valid uid/token pair copied from the reset link. Passwords must contain at least eight characters."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204
             }
           ]
         }
