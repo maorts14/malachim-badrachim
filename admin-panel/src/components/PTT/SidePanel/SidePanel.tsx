@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   MoreVertical,
   Search,
@@ -10,12 +10,19 @@ import {
 import "./SidePanel.css";
 import AvatarCard from "@/components/AvatarCard/AvatarCard";
 // import { chatItems } from "@/data/chatItems";
-import { INITIAL_ROWS } from "@/data/initialRows";
+import { toDashboardUser } from "@/data/userPresentation";
+import { rescueApi } from "@/services/api";
+import type { User } from "@/types/types";
 
 function SidePanel() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(1);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    void rescueApi.listUsers().then((data) => setUsers(data.map(toDashboardUser))).catch(() => setUsers([]));
+  }, []);
 
   // const filtered = chatItems.filter(
   //   (c) =>
@@ -69,7 +76,7 @@ function SidePanel() {
 
       {/* List */}
       <div className="chat-list">
-        {INITIAL_ROWS.map((item) => (
+        {users.filter((user) => user.name.includes(search)).map((item) => (
           <div
             key={item.id}
             className={`chat-item ${selected === item.id ? "active" : ""}`}

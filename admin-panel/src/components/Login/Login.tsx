@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 import "./Login.css";
 
 type Props = {
@@ -16,13 +15,14 @@ export default function Login({ loading: initialLoading = false, error: initialE
   const [loading, setLoading] = useState(initialLoading);
   const [error, setError] = useState(initialError);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(undefined);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await login(email, password);
       navigate('/events-table', { replace: true });
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'ההתחברות נכשלה.');

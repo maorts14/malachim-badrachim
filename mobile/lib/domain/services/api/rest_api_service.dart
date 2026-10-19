@@ -32,10 +32,14 @@ class RestApiService {
           final String? storedAuthorization =
               await StorageManager.instance.authorization();
 
-          if (storedAuthorization != null && storedAuthorization.isNotEmpty) {
-            options.headers['Authorization'] = storedAuthorization;
-          } else if (_accessToken != null && _accessToken!.isNotEmpty) {
+          // The Firebase token is refreshed for the active session. Prefer it
+          // over a persisted value, which can be expired after the app has
+          // been closed and was causing authenticated screens to receive 401.
+          if (_accessToken != null && _accessToken!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_accessToken';
+          } else if (storedAuthorization != null &&
+              storedAuthorization.isNotEmpty) {
+            options.headers['Authorization'] = storedAuthorization;
           }
 
           handler.next(options);
@@ -368,6 +372,11 @@ class RestApiService {
 
   Future<List<UserDetails>> getAllUsers() async {
     final response = await _safeGet('/api/user/');
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      throw StateError(_apiErrorMessage(response.data));
+    }
     final userList = _asList(response.data);
     return userList.map((json) => UserDetails.fromJson(json)).toList();
   }

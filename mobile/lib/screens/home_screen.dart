@@ -42,12 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
     'הגדרות',
   ];
 
-  static const List<Widget> _screens = <Widget>[
-    EventTabScreen(),
-    MapTabScreen(),
-    PttTabScreen(),
-    UsersTabScreen(),
-    SettingsScreen(),
+  static const List<String> _subtitles = <String>[
+    'ניהול אירועים בזמן אמת',
+    'מפת אירועים',
+    'קשר קולי',
+    'צוות המתנדבים',
+    'החשבון שלי',
   ];
 
   // @override
@@ -66,13 +66,18 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _FigmaHeader(
               title: _titles[_selectedIndex],
-              onProfilePressed: () => _showQuickActions(context),
+              subtitle: _subtitles[_selectedIndex],
+              // The Figma reference keeps the header clear on content-focused
+              // tabs. Account actions remain available from the events tab.
+              onProfilePressed: _selectedIndex == 0
+                  ? () => _showQuickActions(context)
+                  : null,
             ),
             Expanded(
-              child: IndexedStack(
-                index: _selectedIndex,
-                children: _screens,
-              ),
+              // Mapbox owns a native Android surface. Keeping it mounted inside
+              // an offstage IndexedStack lets that surface draw over other tabs
+              // on some emulators, resulting in a black screen.
+              child: _selectedScreen,
             ),
           ],
         ),
@@ -83,6 +88,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget get _selectedScreen => switch (_selectedIndex) {
+        0 => const EventTabScreen(),
+        1 => const MapTabScreen(),
+        2 => const PttTabScreen(),
+        3 => const UsersTabScreen(),
+        _ => const SettingsScreen(),
+      };
 
   void _showQuickActions(BuildContext context) {
     showModalBottomSheet<void>(
@@ -98,7 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('פרטי משתמש'),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const UserDetailsScreen()));
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const UserDetailsScreen()));
                 },
               ),
               ListTile(
@@ -106,12 +120,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('אודות'),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AboutScreen()));
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const AboutScreen()));
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.logout, color: Color(0xFFD43A2F)),
-                title: const Text('התנתקות', style: TextStyle(color: Color(0xFFD43A2F))),
+                title: const Text('התנתקות',
+                    style: TextStyle(color: Color(0xFFD43A2F))),
                 onTap: () {
                   Navigator.pop(context);
                   _showLogoutAlert(context);
@@ -156,14 +172,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ).show();
   }
-
 }
 
 class _FigmaHeader extends StatelessWidget {
-  const _FigmaHeader({required this.title, required this.onProfilePressed});
+  const _FigmaHeader({
+    required this.title,
+    required this.subtitle,
+    this.onProfilePressed,
+  });
 
   final String title;
-  final VoidCallback onProfilePressed;
+  final String subtitle;
+  final VoidCallback? onProfilePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -171,41 +191,64 @@ class _FigmaHeader extends StatelessWidget {
       color: const Color(0xFF16233A),
       child: SafeArea(
         bottom: false,
-        child: SizedBox(
-          height: 116,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Column(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(
+            // Do not constrain the header to a fixed height: Android text
+            // scaling can legitimately make its two-line title taller.
+            mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
                   height: 60,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      InkWell(
-                        onTap: onProfilePressed,
-                        borderRadius: BorderRadius.circular(24),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(color: Color(0x1AFFFFFF), shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: SvgPicture.asset('assets/images/figma/figma_icon_10.svg', width: 20, height: 20),
-                        ),
-                      ),
-                      Image.asset('assets/images/figma/raw_image_2.png', width: 81, height: 60, fit: BoxFit.contain),
+                      if (onProfilePressed != null)
+                        InkWell(
+                          onTap: onProfilePressed,
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                                color: Color(0x1AFFFFFF),
+                                shape: BoxShape.circle),
+                            alignment: Alignment.center,
+                            child: SvgPicture.asset(
+                                'assets/images/figma/figma_icon_10.svg',
+                                width: 20,
+                                height: 20),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 44, height: 44),
+                      Image.asset('assets/images/figma/raw_image_2.png',
+                          width: 81, height: 60, fit: BoxFit.contain),
                     ],
                   ),
                 ),
                 Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 23, height: 1.35)),
-                  ),
-                ),
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(subtitle,
+                                  style: const TextStyle(
+                                      color: Color(0x99FFFFFF),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.2)),
+                              const SizedBox(height: 2),
+                              Text(title,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 23,
+                                      height: 1.25)),
+                            ]))),
               ],
-            ),
           ),
         ),
       ),
@@ -214,7 +257,8 @@ class _FigmaHeader extends StatelessWidget {
 }
 
 class _FigmaBottomNavigation extends StatelessWidget {
-  const _FigmaBottomNavigation({required this.selectedIndex, required this.onSelected});
+  const _FigmaBottomNavigation(
+      {required this.selectedIndex, required this.onSelected});
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -241,7 +285,8 @@ class _FigmaBottomNavigation extends StatelessWidget {
             Expanded(
               child: InkWell(
                 onTap: () => onSelected(index),
-                child: _NavItem(item: _items[index], selected: index == selectedIndex),
+                child: _NavItem(
+                    item: _items[index], selected: index == selectedIndex),
               ),
             ),
         ],
@@ -261,7 +306,13 @@ class _NavItem extends StatelessWidget {
     return Stack(
       alignment: Alignment.topCenter,
       children: [
-        if (selected) Container(width: 36, height: 3, decoration: BoxDecoration(color: const Color(0xFF128A5E), borderRadius: BorderRadius.circular(8))),
+        if (selected)
+          Container(
+              width: 36,
+              height: 3,
+              decoration: BoxDecoration(
+                  color: const Color(0xFF128A5E),
+                  borderRadius: BorderRadius.circular(8))),
         Center(
           child: Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -270,7 +321,12 @@ class _NavItem extends StatelessWidget {
               children: [
                 SvgPicture.asset(item.asset, width: 23, height: 23),
                 const SizedBox(height: 4),
-                Text(item.label, style: TextStyle(color: selected ? Colors.white : const Color(0x8CFFFFFF), fontSize: 11, fontWeight: FontWeight.w600)),
+                Text(item.label,
+                    style: TextStyle(
+                        color:
+                            selected ? Colors.white : const Color(0x8CFFFFFF),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
               ],
             ),
           ),

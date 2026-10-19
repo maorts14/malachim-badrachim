@@ -19,6 +19,7 @@ SECRET_KEY = config(
 )
 
 DEBUG = config("DEBUG", default=True, cast=bool)
+REGISTRATION_INVITE_CODE = config("REGISTRATION_INVITE_CODE", default="")
 
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
@@ -93,6 +94,7 @@ INSTALLED_APPS = [
     'daphne',
     'channels',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'corsheaders',
     'alerts',
@@ -222,7 +224,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'alerts.authentication.FirebaseAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -236,10 +238,9 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': (
         'Production API for the Rescue Alert System.\n\n'
         '**How to authenticate:**\n'
-        '1. Click the **Get Token** button at the top of the page\n'
-        '2. Sign in with Google and copy the token\n'
-        '3. Click **Authorize** below, paste the token, click **Authorize**\n\n'
-        'Token expires after 1 hour — repeat to refresh.'
+        '1. Get a JWT from `POST /api/token/`\n'
+        '2. Click **Authorize** below and paste the access token\n\n'
+        'The web dispatcher uses the Django cookie session endpoints under `/api/auth/session/`.'
     ),
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -251,6 +252,7 @@ SPECTACULAR_SETTINGS = {
                 'before calling any other endpoint. A 200 response means you are authenticated.'
             ),
         },
+        {'name': 'auth', 'description': 'Registration, JWT login, and web-session login.'},
         {'name': 'alerts', 'description': 'Create and retrieve fire/rescue alerts.'},
         {'name': 'user', 'description': 'User profiles and location updates.'},
         {'name': 'group', 'description': 'Rescue groups and membership.'},

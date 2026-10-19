@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/models/alert_message.dart';
@@ -30,7 +32,7 @@ class _EventTabScreenState extends State<EventTabScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: _loading && events.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const _EventsLoadingState()
           : _loadError != null && events.isEmpty
               ? _EventsLoadFailure(onRetry: getAlerts)
               : Stack(
@@ -76,7 +78,9 @@ class _EventTabScreenState extends State<EventTabScreen> {
       });
     }
     try {
-      final alertsResult = await RestApiService().getAllAlerts();
+      final alertsResult = await RestApiService()
+          .getAllAlerts()
+          .timeout(const Duration(seconds: 25));
       if (!mounted) return;
       setState(() {
         openEvents
@@ -120,11 +124,11 @@ class _EventsLoadFailure extends StatelessWidget {
             const Icon(
               Icons.cloud_off_outlined,
               size: 48,
-              color: Color(0xFF8A94A6),
+              color: Color(0xFFD43A2F),
             ),
             const SizedBox(height: 12),
             const Text(
-              'לא ניתן לטעון את האירועים כרגע',
+              'לא ניתן להתחבר לשרת',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF16233A),
@@ -134,7 +138,7 @@ class _EventsLoadFailure extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'בדקו את החיבור ונסו שוב.',
+              'בדקו את חיבור האינטרנט ואת זמינות השרת, ואז נסו שוב.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF5A677D)),
             ),
@@ -145,6 +149,93 @@ class _EventsLoadFailure extends StatelessWidget {
               label: const Text('נסה שוב'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventsLoadingState extends StatefulWidget {
+  const _EventsLoadingState();
+
+  @override
+  State<_EventsLoadingState> createState() => _EventsLoadingStateState();
+}
+
+class _EventsLoadingStateState extends State<_EventsLoadingState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _progressController = AnimationController(
+    vsync: this,
+    value: 0.06,
+    duration: const Duration(seconds: 14),
+  )..animateTo(0.92, curve: Curves.easeOutCubic);
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: AnimatedBuilder(
+          animation: _progressController,
+          builder: (context, _) {
+            final percent = (_progressController.value * 100).round();
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 112,
+                  height: 112,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 112,
+                        height: 112,
+                        child: CircularProgressIndicator(
+                          value: _progressController.value,
+                          strokeWidth: 7,
+                          strokeCap: StrokeCap.round,
+                          backgroundColor: const Color(0xFFE3E8E2),
+                          color: const Color(0xFF128A5E),
+                        ),
+                      ),
+                      Text(
+                        '$percent%',
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(
+                          color: Color(0xFF16233A),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const Text(
+                  'טוענים אירועים',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF16233A),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'בודקים חיבור לשרת ומביאים את הנתונים העדכניים.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF5A677D), height: 1.4),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

@@ -2,7 +2,7 @@ import { type FC, useEffect, useState } from "react";
 import { X, AlertCircle, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import "./AlertModal.css";
 import { fetchAlerts } from "../../services/alertsService";
-import type { Alert } from "../../types/types";
+import type { ApiAlert } from "../../services/api";
 
 type Props = {
     open: boolean;
@@ -10,10 +10,10 @@ type Props = {
 };
 
 const AlertModal: FC<Props> = ({ open, onClose }) => {
-    const [alerts, setAlerts] = useState<Alert[]>([]);
+    const [alerts, setAlerts] = useState<ApiAlert[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+    const [selectedAlert, setSelectedAlert] = useState<ApiAlert | null>(null);
 
     useEffect(() => {
         if (!open) return;
@@ -33,15 +33,14 @@ const AlertModal: FC<Props> = ({ open, onClose }) => {
         loadAlerts();
     }, [open]);
 
-    const getIconForType = (type: string) => {
-        switch (type) {
-            case "error":
+    const getIconForPriority = (priority: ApiAlert['priority']) => {
+        switch (priority) {
+            case "CRITICAL":
                 return <AlertCircle size={20} className="alert-icon error" />;
-            case "warning":
+            case "HIGH":
                 return <AlertTriangle size={20} className="alert-icon warning" />;
-            case "success":
+            case "LOW":
                 return <CheckCircle size={20} className="alert-icon success" />;
-            case "info":
             default:
                 return <Info size={20} className="alert-icon info" />;
         }
@@ -80,26 +79,22 @@ const AlertModal: FC<Props> = ({ open, onClose }) => {
                             {alerts.map((alert) => (
                                 <div
                                     key={alert.id}
-                                    className={`alert-item ${alert.type}`}
+                                    className={`alert-item ${alert.priority.toLowerCase()}`}
                                     onClick={() => setSelectedAlert(alert)}
                                 >
                                     <div className="alert-item-icon">
-                                        {getIconForType(alert.type)}
+                                        {getIconForPriority(alert.priority)}
                                     </div>
                                     <div className="alert-item-content">
                                         <h3>{alert.title}</h3>
-                                        <p>{alert.message}</p>
+                                        <p>{alert.description}</p>
                                         <span className="alert-time">
-                                            {new Date(alert.timestamp).toLocaleString(
+                                            {new Date(alert.created_at).toLocaleString(
                                                 "he-IL"
                                             )}
                                         </span>
                                     </div>
-                                    {alert.severity && (
-                                        <span className={`severity-badge ${alert.severity}`}>
-                                            {alert.severity}
-                                        </span>
-                                    )}
+                                    <span className={`severity-badge ${alert.priority.toLowerCase()}`}>{alert.priority}</span>
                                 </div>
                             ))}
                         </div>
@@ -116,72 +111,35 @@ const AlertModal: FC<Props> = ({ open, onClose }) => {
                             </button>
                             <div className="detail-header">
                                 <div className="detail-icon">
-                                    {getIconForType(selectedAlert.type)}
+                                    {getIconForPriority(selectedAlert.priority)}
                                 </div>
                                 <div className="detail-title-section">
                                     <h2>{selectedAlert.title}</h2>
-                                    {selectedAlert.severity && (
-                                        <span
-                                            className={`severity-badge ${selectedAlert.severity}`}
-                                        >
-                                            {selectedAlert.severity}
-                                        </span>
-                                    )}
+                                    <span className={`severity-badge ${selectedAlert.priority.toLowerCase()}`}>{selectedAlert.priority}</span>
                                 </div>
                             </div>
 
                             <div className="detail-content">
                                 <div className="detail-field">
                                     <label>תיאור:</label>
-                                    <p>{selectedAlert.message}</p>
+                                    <p>{selectedAlert.description}</p>
                                 </div>
 
                                 <div className="detail-field">
                                     <label>זמן:</label>
                                     <p>
-                                        {new Date(selectedAlert.timestamp).toLocaleString(
+                                        {new Date(selectedAlert.created_at).toLocaleString(
                                             "he-IL"
                                         )}
                                     </p>
                                 </div>
 
                                 <div className="detail-field">
-                                    <label>סוג:</label>
-                                    <p>{selectedAlert.type}</p>
+                                    <label>עדיפות:</label>
+                                    <p>{selectedAlert.priority}</p>
                                 </div>
 
-                                {selectedAlert.read !== undefined && (
-                                    <div className="detail-field">
-                                        <label>סטטוס:</label>
-                                        <p>{selectedAlert.read ? "נקרא" : "לא נקרא"}</p>
-                                    </div>
-                                )}
-
-                                {Object.entries(selectedAlert).map(([key, value]) => {
-                                    if (
-                                        ![
-                                            "id",
-                                            "title",
-                                            "message",
-                                            "type",
-                                            "timestamp",
-                                            "read",
-                                            "severity",
-                                        ].includes(key)
-                                    ) {
-                                        return (
-                                            <div key={key} className="detail-field">
-                                                <label>
-                                                    {key.charAt(0).toUpperCase() +
-                                                        key.slice(1)}
-                                                    :
-                                                </label>
-                                                <p>{String(value)}</p>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })}
+                                <div className="detail-field"><label>סטטוס:</label><p>{selectedAlert.status}</p></div>
                             </div>
                         </div>
                     )}

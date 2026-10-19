@@ -31,3 +31,6 @@ mobile/macos/Runner/GoogleService-Info.plist
 admin-panel/node_modules/
 admin-panel/dist/
 .env*.local
+
+# Local mobile emulator captures and debugging screenshots
+mobile/*.png

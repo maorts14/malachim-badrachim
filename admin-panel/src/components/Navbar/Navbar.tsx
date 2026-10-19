@@ -9,7 +9,7 @@ import myImage from "../../assets/logo.png";
 import { navItems } from "../../data/navItem";
 import { NavLink } from "react-router-dom";
 import type { User as UserType } from "../../types/types";
-import { INITIAL_ROWS } from "../../data/initialRows";
+import { useAuth } from '../../context/AuthContext';
 
 type NavbarProps = {
   setWindowOpen: (open: boolean) => void;
@@ -21,6 +21,7 @@ const Navbar: FC<NavbarProps> = ({setWindowOpen }) => {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,9 +46,8 @@ const Navbar: FC<NavbarProps> = ({setWindowOpen }) => {
   }
 
   function handleUserButtonClick() {
-    // Get the current user (first user from initial data)
-    const currentUser = INITIAL_ROWS[0];
-    setSelectedUser(currentUser);
+    if (!user) return;
+    setSelectedUser({ id: user.id, name: user.name || user.username, lastUpdate: '—', status: user.role ?? '—', event: null, info: user.email, dotColor: '#22c55e', dotType: 'single', unread: 0 });
     setUserModalOpen(true);
     setMenuOpen(false);
   }

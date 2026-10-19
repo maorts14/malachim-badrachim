@@ -1,10 +1,11 @@
 import Panel from "./Panel/Panel";
-import { INITIAL_ROWS } from "../../data/initialRows";
 import SidePanel from "./SidePanel/SidePanel";
 import "./Ptt.css";
 import { Plus} from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { User } from "@/types/types";
+import { rescueApi } from "@/services/api";
+import { toDashboardUser } from "@/data/userPresentation";
 
 
 interface DynamicPanel {
@@ -15,12 +16,17 @@ interface DynamicPanel {
 
 export default function Ptt() {
   const [dynamicPanels, setDynamicPanels] = useState<DynamicPanel[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    void rescueApi.listUsers().then((data) => setUsers(data.map(toDashboardUser))).catch(() => setUsers([]));
+  }, []);
 
   const handleAddPanel = () => {
     const newPanel: DynamicPanel = {
       id: `panel-${Date.now()}`,
       title: `פאנל ${dynamicPanels.length + 1}`,
-      rows: INITIAL_ROWS,
+      rows: users,
     };
     setDynamicPanels([...dynamicPanels, newPanel]);
   };
@@ -42,7 +48,7 @@ export default function Ptt() {
       <div className="content">
         <Panel
           title="מועדפים"
-          rows={INITIAL_ROWS}
+          rows={users}
           addLabel="הוסף מועדף"
           collapseLabel="כיווץ"
           showAddPanel={false}
@@ -50,7 +56,7 @@ export default function Ptt() {
 
         <Panel
           title="AlphaTrial"
-          rows={INITIAL_ROWS}
+          rows={users}
           addLabel="הוסף משתמש"
           collapseLabel="כיווץ והשתקה"
           showAddPanel={true}

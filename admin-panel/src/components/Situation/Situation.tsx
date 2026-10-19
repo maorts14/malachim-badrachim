@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./Situation.css";
-import { INITIAL_ROWS } from "../../data/initialRows";
+import { toDashboardUser } from "../../data/userPresentation";
+import { rescueApi } from "../../services/api";
+import type { User } from "../../types/types";
 import Avatar from "../Avatar/Avatar";
 import { Timestamp, StatusCell } from "../../utils/utils";
 
@@ -10,6 +12,23 @@ export default function Situation() {
   const [contactSearch, setContactSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("הכל");
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+  const [rows, setRows] = useState<User[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      setRows((await rescueApi.listUsers()).map(toDashboardUser));
+      setError(null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'טעינת המשתמשים נכשלה.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadUsers(); }, []);
 
   // Robust parser: handles Date object, ISO string, or "DD/MM/YYYY HH:mm"
   const parseDate = (value: unknown) => {
@@ -38,7 +57,7 @@ export default function Situation() {
   };
 
   // Filter rows
-  const filtered = INITIAL_ROWS.filter((row) => {
+  const filtered = rows.filter((row) => {
     const cq = contactSearch.toLowerCase();
     const matchesContact = cq === "" || row.name.toLowerCase().includes(cq);
     const matchesStatus =
@@ -69,8 +88,11 @@ export default function Situation() {
       {/* Header */}
       <div className="situation__header">
         <span className="situation__title">סטטוס</span>
-        <span className="situation__count">{INITIAL_ROWS.length} פריטים</span>
+        <span className="situation__count">{loading ? 'טוען…' : `${rows.length} משתמשים`}</span>
+        <button type="button" onClick={loadUsers} disabled={loading}>רענן</button>
       </div>
+
+      {error && <p role="alert">{error}</p>}
 
       {/* Table */}
       <div className="situation__table-scroll">
@@ -130,6 +152,7 @@ export default function Situation() {
           </thead>
 
           <tbody>
+            {!loading && !error && sorted.length === 0 && <tr><td colSpan={5}>אין משתמשים להצגה</td></tr>}
             {sorted.map((row) => (
               <tr key={row.id} className="situation__row">
                 <td className="situation__cell" data-label="איש קשר">

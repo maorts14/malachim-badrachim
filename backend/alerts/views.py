@@ -1,17 +1,21 @@
+from django.contrib.auth import login as django_login, logout as django_logout
 from django.contrib.auth.models import User
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db.models import Prefetch, Q
 from django.db import transaction
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-import firebase_admin.auth
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import (
     Alert,
@@ -28,18 +32,18 @@ from .realtime import publish_message_created
 from .serializers import (
     AlertSerializer, DeviceRegistrationSerializer,
     UserProfileSerializer, GroupSerializer, MessageSerializer, NotificationSerializer,
+    RegisterSerializer, SessionLoginSerializer, UserInfoSerializer,
 )
 
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
 
-def _firebase_uid_from_request(request):
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-    if not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:]
-    try:
-        return firebase_admin.auth.verify_id_token(token)['uid']
-    except Exception:
-        return None
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        refresh = RefreshToken.for_user(user)
+        return Response({'access': str(refresh.access_token), 'refresh': str(refresh), 'user': UserInfoSerializer(user).data}, status=status.HTTP_201_CREATED)
 
 
 class WhoAmIView(APIView):
@@ -48,46 +52,77 @@ class WhoAmIView(APIView):
         summary='Verify your token works (start here)',
         responses={
             200: OpenApiResponse(description='Token accepted — returns your identity'),
-            401: OpenApiResponse(description='Missing, expired, or invalid Firebase token'),
+            401: OpenApiResponse(description='Missing, expired, or invalid token'),
         },
         description=(
             '**Use this before testing anything else.**\n\n'
-            'Send your Firebase ID token as `Authorization: Bearer <token>`. '
-            'If you get a 200 back with your email, you are authenticated and ready to test all other endpoints.\n\n'
-            'If you get 401, your token is missing, expired, or invalid — go back to `/get-token.html` and get a fresh one.'
+            'Send a JWT as `Authorization: Bearer <access>` or sign in through the web session. '
+            'If you get a 200 back, you are authenticated and ready to test all other endpoints.'
         ),
     )
     def get(self, request):
         return Response({
             'authenticated': True,
-            'firebase_uid': request.user.username,
-            'email': request.user.email,
-            'name': request.user.get_full_name(),
+            'user': UserInfoSerializer(request.user).data,
         })
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class SessionView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'authenticated': request.user.is_authenticated, 'user': UserInfoSerializer(request.user).data if request.user.is_authenticated else None})
+
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class SessionLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SessionLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        django_login(request, user)
+        return Response({'authenticated': True, 'user': UserInfoSerializer(user).data})
+
+
+class SessionLogoutView(APIView):
+    def post(self, request):
+        django_logout(request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class JWTLogoutView(APIView):
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except TokenError:
+                pass
+        return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
 class RegisterDeviceView(APIView):
+    permission_classes = [IsAuthenticated]
     @extend_schema(
         request=DeviceRegistrationSerializer,
         responses={
             204: OpenApiResponse(description='Device registered'),
-            401: OpenApiResponse(description='Missing or invalid Firebase token'),
+            401: OpenApiResponse(description='Missing or invalid token'),
         },
     )
     def post(self, request):
-        uid = _firebase_uid_from_request(request)
-        if not uid:
-            return Response({'error': 'Unauthorized'}, status=401)
-
         serializer = DeviceRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         DeviceRegistration.objects.update_or_create(
-            firebase_uid=uid,
+            user_uid=str(request.user.pk),
             device_id=data['device_id'],
             defaults={
-                'fcm_token': data['fcm_token'],
+                'push_token': data['push_token'],
                 'platform': data['platform'],
                 'device_model': data.get('device_model', ''),
             },

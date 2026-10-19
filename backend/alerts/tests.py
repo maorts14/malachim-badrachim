@@ -1,14 +1,51 @@
 from django.contrib.auth.models import User
 from django.contrib.gis.geos import Point
+from django.contrib.sessions.backends.db import SessionStore
 from django.test import TransactionTestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 from asgiref.sync import async_to_sync, sync_to_async
 from channels.testing import WebsocketCommunicator
-from unittest.mock import patch
 
 from .models import Alert, AlertAssignment, Group, Message, UserProfile
 from .realtime import publish_message_created
+
+
+class AuthApiTests(APITestCase):
+    def register(self, email='new@example.com', password='strongpass123'):
+        return self.client.post(
+            '/api/auth/register/',
+            {'email': email, 'password': password, 'full_name': 'New Responder'},
+            format='json',
+        )
+
+    def test_register_jwt_and_whoami(self):
+        registered = self.register()
+        self.assertEqual(registered.status_code, status.HTTP_201_CREATED)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {registered.data['access']}")
+        whoami = self.client.get('/api/auth/whoami/')
+        self.assertEqual(whoami.status_code, status.HTTP_200_OK)
+        self.assertEqual(whoami.data['user']['email'], 'new@example.com')
+
+    def test_session_login_establishes_dispatcher_session(self):
+        User.objects.create_user(
+            username='dispatcher', email='dispatcher@example.com', password='strongpass123', is_staff=True,
+        )
+        anonymous = self.client.get('/api/auth/session/')
+        self.assertFalse(anonymous.data['authenticated'])
+        logged_in = self.client.post(
+            '/api/auth/session/login/',
+            {'username': 'dispatcher@example.com', 'password': 'strongpass123'}, format='json',
+        )
+        self.assertEqual(logged_in.status_code, status.HTTP_200_OK)
+        self.assertTrue(logged_in.data['authenticated'])
+        self.assertEqual(self.client.get('/api/auth/session/').data['user']['username'], 'dispatcher')
+        self.assertEqual(self.client.post('/api/auth/session/logout/').status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_session_login_rejects_non_dispatcher(self):
+        User.objects.create_user(username='volunteer', password='strongpass123')
+        response = self.client.post('/api/auth/session/login/', {'username': 'volunteer', 'password': 'strongpass123'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class AlertDispatchContractTests(APITestCase):
@@ -180,6 +217,12 @@ class RealtimeMessageContractTests(TransactionTestCase):
             user=self.volunteer,
             dispatched_by=self.dispatcher,
         )
+        session = SessionStore()
+        session['_auth_user_id'] = str(self.volunteer.id)
+        session['_auth_user_backend'] = 'django.contrib.auth.backends.ModelBackend'
+        session['_auth_user_hash'] = self.volunteer.get_session_auth_hash()
+        session.save()
+        self.session_key = session.session_key
 
     def test_assigned_volunteer_receives_an_alert_message(self):
         message = Message.objects.create(
@@ -195,21 +238,17 @@ class RealtimeMessageContractTests(TransactionTestCase):
             communicator = WebsocketCommunicator(
                 application,
                 '/ws/messages/',
-                subprotocols=['rescue-v1', 'test.firebase.token'],
+                headers=[(b'cookie', f'sessionid={self.session_key}'.encode())],
             )
             connected, protocol = await communicator.connect()
             self.assertTrue(connected)
-            self.assertEqual(protocol, 'rescue-v1')
+            self.assertIsNone(protocol)
             await sync_to_async(publish_message_created)(message.id)
             payload = await communicator.receive_json_from(timeout=1)
             await communicator.disconnect()
             return payload
 
-        with patch(
-            'alerts.consumers.firebase_admin.auth.verify_id_token',
-            return_value={'uid': self.volunteer.username, 'email': 'volunteer@example.test'},
-        ):
-            payload = async_to_sync(receive_and_disconnect)()
+        payload = async_to_sync(receive_and_disconnect)()
         self.assertEqual(payload['type'], 'message.created')
         self.assertEqual(payload['message']['id'], message.id)
         self.assertEqual(payload['message']['alert'], self.alert.id)
@@ -232,7 +271,7 @@ class RealtimeMessageContractTests(TransactionTestCase):
             communicator = WebsocketCommunicator(
                 application,
                 '/ws/messages/',
-                subprotocols=['rescue-v1', 'test.firebase.token'],
+                headers=[(b'cookie', f'sessionid={self.session_key}'.encode())],
             )
             connected, _ = await communicator.connect()
             self.assertTrue(connected)
@@ -241,8 +280,4 @@ class RealtimeMessageContractTests(TransactionTestCase):
             await communicator.disconnect()
             return received
 
-        with patch(
-            'alerts.consumers.firebase_admin.auth.verify_id_token',
-            return_value={'uid': self.volunteer.username, 'email': 'volunteer@example.test'},
-        ):
-            self.assertTrue(async_to_sync(assert_nothing_and_disconnect)())
+        self.assertTrue(async_to_sync(assert_nothing_and_disconnect)())

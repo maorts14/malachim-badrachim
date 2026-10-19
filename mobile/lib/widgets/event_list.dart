@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:rescue_app/models/alert_message.dart';
 
@@ -14,6 +13,39 @@ class EventsList extends StatefulWidget {
 
 class _EventsListState extends State<EventsList> {
   _EventFilter _filter = _EventFilter.all;
+  final ScrollController _scrollController = ScrollController();
+  bool _pulledPastTop = false;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+
+    final metrics = notification.metrics;
+    if (metrics.pixels < metrics.minScrollExtent) {
+      _pulledPastTop = true;
+    }
+
+    if (notification is ScrollEndNotification && _pulledPastTop) {
+      _pulledPastTop = false;
+      // A forceful pull can leave a bouncing list between its edge and the
+      // previous scroll position. Always settle that gesture at the real top.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.animateTo(
+          _scrollController.position.minScrollExtent,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+
+    return false;
+  }
 
   List<AlertMessage> get _visibleEvents => widget.events.where((event) {
         switch (_filter) {
@@ -41,54 +73,60 @@ class _EventsListState extends State<EventsList> {
     final events = _visibleEvents;
     return ScrollConfiguration(
       behavior: const _EventListScrollBehavior(),
-      child: ListView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        dragStartBehavior: DragStartBehavior.down,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        children: [
-          if (urgent != null) ...[
-            _UrgentBanner(
-                event: urgent, onTap: () => widget.onSelected(urgent)),
-            const SizedBox(height: 16),
-          ],
-          SizedBox(
-            height: 40,
-            child: Row(
-              children: [
-                for (var index = 0;
-                    index < _EventFilter.values.length;
-                    index++) ...[
-                  if (index > 0) const SizedBox(width: 6),
-                  Expanded(
-                    child: _FilterButton(
-                      filter: _EventFilter.values[index],
-                      selected: _filter == _EventFilter.values[index],
-                      onTap: () =>
-                          setState(() => _filter = _EventFilter.values[index]),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _handleScrollNotification,
+        child: ListView(
+          controller: _scrollController,
+          // On Android, elastic scrolling let a long pull leave a large blank
+          // area above or below the content. Keep pull-to-refresh, but clamp
+          // the list at its real edges on every device.
+          physics: const ClampingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
           ),
-          const SizedBox(height: 24),
-          Text('${events.length} אירועים',
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                  color: Color(0xFF16233A),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15)),
-          const SizedBox(height: 10),
-          if (events.isEmpty)
-            const _EmptyEvents()
-          else
-            for (final event in events) ...[
-              _EventRow(event: event, onTap: () => widget.onSelected(event)),
-              const SizedBox(height: 12),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          children: [
+            if (urgent != null) ...[
+              _UrgentBanner(
+                  event: urgent, onTap: () => widget.onSelected(urgent)),
+              const SizedBox(height: 16),
             ],
-        ],
+            SizedBox(
+              height: 40,
+              child: Row(
+                children: [
+                  for (var index = 0;
+                      index < _EventFilter.values.length;
+                      index++) ...[
+                    if (index > 0) const SizedBox(width: 6),
+                    Expanded(
+                      child: _FilterButton(
+                        filter: _EventFilter.values[index],
+                        selected: _filter == _EventFilter.values[index],
+                        onTap: () => setState(
+                            () => _filter = _EventFilter.values[index]),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text('${events.length} אירועים',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    color: Color(0xFF16233A),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
+            const SizedBox(height: 10),
+            if (events.isEmpty)
+              const _EmptyEvents()
+            else
+              for (final event in events) ...[
+                _EventRow(event: event, onTap: () => widget.onSelected(event)),
+                const SizedBox(height: 12),
+              ],
+          ],
+        ),
       ),
     );
   }

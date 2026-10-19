@@ -1,5 +1,3 @@
-import { auth } from '../firebase';
-
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
 
 export type AlertStatus =
@@ -38,6 +36,8 @@ export interface ApiUser {
   user_id: number;
   username: string;
   email: string;
+  display_name: string;
+  phone: string;
   role: 'manager' | 'emergency_dispatcher' | 'user';
   latitude: number | null;
   longitude: number | null;
@@ -68,14 +68,15 @@ export interface RealtimeMessageEvent {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await auth.currentUser?.getIdToken();
-  if (!token) throw new Error('יש להתחבר כדי לבצע פעולה זו.');
+  const method = (init.method ?? 'GET').toUpperCase();
+  const csrfToken = document.cookie.split('; ').find((item) => item.startsWith('csrftoken='))?.split('=')[1];
 
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
-      Authorization: `Bearer ${token}`,
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(method === 'GET' || method === 'HEAD' || !csrfToken ? {} : { 'X-CSRFToken': decodeURIComponent(csrfToken) }),
       ...init.headers,
     },
   });
@@ -105,18 +106,14 @@ export const rescueApi = {
 };
 
 /**
- * Opens the authenticated message-notification transport. The Firebase token
- * travels in the WebSocket subprotocol, never in the URL or query string.
+ * The browser attaches the Django session cookie to the same-origin socket.
  */
 export async function openMessageSocket(
   onEvent: (event: RealtimeMessageEvent) => void,
 ): Promise<WebSocket> {
-  const token = await auth.currentUser?.getIdToken();
-  if (!token) throw new Error('יש להתחבר כדי לקבל עדכונים בזמן אמת.');
-
   const apiUrl = new URL(baseUrl, window.location.origin);
   const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${apiUrl.host}/ws/messages/`, ['rescue-v1', token]);
+  const socket = new WebSocket(`${protocol}//${apiUrl.host}/ws/messages/`);
   socket.addEventListener('message', (messageEvent) => {
     try {
       const event = JSON.parse(messageEvent.data) as RealtimeMessageEvent;

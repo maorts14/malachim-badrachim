@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 def send_alert_assignment_notification(*, alert, user_ids):
     """Best-effort FCM delivery; assignment persistence never depends on FCM."""
     tokens = list(
-        DeviceRegistration.objects.filter(firebase_uid__in=user_ids)
-        .values_list('fcm_token', flat=True)
+        DeviceRegistration.objects.filter(user_uid__in=[str(user_id) for user_id in user_ids])
+        .values_list('push_token', flat=True)
     )
     if not tokens:
         return 0

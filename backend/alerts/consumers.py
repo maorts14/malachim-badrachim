@@ -3,49 +3,10 @@
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import User
-import firebase_admin.auth
 
-from .models import AlertAssignment, Message, UserProfile
+from .models import AlertAssignment, Message
 from .permissions import is_dispatcher
 from .serializers import MessageSerializer
-
-
-_SOCKET_PROTOCOL = 'rescue-v1'
-
-
-@database_sync_to_async
-def _authenticate_subprotocols(subprotocols):
-    """Return a Django user for an offered Firebase bearer-token subprotocol.
-
-    The token is offered as the second protocol token after ``rescue-v1``. This
-    prevents it appearing in request URLs, reverse-proxy logs, or browser
-    history. Firebase JWT characters are valid WebSocket protocol-token chars.
-    """
-    if len(subprotocols) != 2 or subprotocols[0] != _SOCKET_PROTOCOL:
-        return None
-    try:
-        decoded = firebase_admin.auth.verify_id_token(subprotocols[1])
-    except Exception:
-        return None
-
-    uid = decoded.get('uid')
-    if not uid:
-        return None
-    email = decoded.get('email', f'{uid}@firebase.local')
-    name = decoded.get('name', '')
-    user, created = User.objects.get_or_create(
-        username=uid,
-        defaults={
-            'email': email,
-            'first_name': name.split(' ')[0] if name else '',
-            'last_name': ' '.join(name.split(' ')[1:]) if name else '',
-        },
-    )
-    if not created and user.email != email:
-        user.email = email
-        user.save(update_fields=['email'])
-    UserProfile.objects.get_or_create(user=user)
-    return user
 
 
 @database_sync_to_async
@@ -75,13 +36,13 @@ class MessageConsumer(AsyncJsonWebsocketConsumer):
     """One authenticated connection receives only messages it can already read."""
 
     async def connect(self):
-        user = await _authenticate_subprotocols(self.scope.get('subprotocols', []))
-        if user is None:
+        user = self.scope['user']
+        if not user.is_authenticated:
             await self.close(code=4401)
             return
         self.user_id = user.id
         await self.channel_layer.group_add('messages', self.channel_name)
-        await self.accept(subprotocol=_SOCKET_PROTOCOL)
+        await self.accept()
 
     async def disconnect(self, close_code):
         if hasattr(self, 'user_id'):
