@@ -1,8 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:rescue_app/managers/storage_manager.dart';
+import 'package:rescue_app/domain/services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -43,25 +42,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     try {
       final String email = _emailController.text.trim();
       final String password = _passwordController.text;
-      final UserCredential credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final User? user = credential.user;
-      if (user != null) {
-        await StorageManager.instance.syncFirebaseUser(user);
-      }
+      await AuthService().signUp(email: email, password: password);
 
       if (!mounted) {
         return;
       }
       context.pop();
-    } on FirebaseAuthException catch (error) {
-      setState(() {
-        _errorMessage = error.message ?? 'ההרשמה נכשלה. נסה שוב.';
-      });
     } catch (_) {
       setState(() {
         _errorMessage = 'שגיאה בלתי צפויה. נסה שוב.';

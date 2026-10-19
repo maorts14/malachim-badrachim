@@ -1,9 +1,5 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
-import 'package:rescue_app/managers/storage_manager.dart';
+import 'package:rescue_app/domain/services/auth_service.dart';
 import 'package:rescue_app/screens/home_screen.dart';
 import 'package:rescue_app/screens/forgot_password_screen.dart';
 import 'package:rescue_app/screens/sign_in_screen.dart';
@@ -50,36 +46,10 @@ class EventDeepLink {
   }
 }
 
-class _GoRouterRefreshStream extends ChangeNotifier {
-  _GoRouterRefreshStream(Stream<User?> stream) {
-    final User? currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      unawaited(StorageManager.instance.syncFirebaseUser(currentUser));
-    }
-
-    _subscription = stream.asBroadcastStream().listen((user) async {
-      if (user == null) {
-        await StorageManager.instance.logout();
-      } else {
-        await StorageManager.instance.syncFirebaseUser(user);
-      }
-      notifyListeners();
-    });
-  }
-
-  late final StreamSubscription<User?> _subscription;
-
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
-}
+final AuthService _authService = AuthService();
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: FirebaseAuth.instance.currentUser == null
-      ? AppRoutePaths.signIn
-      : AppRoutePaths.home,
+  initialLocation: AppRoutePaths.signIn,
   routes: <GoRoute>[
     GoRoute(
       path: AppRoutePaths.home,
@@ -105,7 +75,7 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
   redirect: (context, state) {
-    final bool isLoggedIn = FirebaseAuth.instance.currentUser != null;
+    final bool isLoggedIn = _authService.isAuthenticated;
     final bool isAuthRoute = state.matchedLocation == AppRoutePaths.signIn ||
         state.matchedLocation == AppRoutePaths.signUp ||
         state.matchedLocation == AppRoutePaths.forgotPassword;
@@ -120,7 +90,5 @@ final GoRouter appRouter = GoRouter(
 
     return null;
   },
-  refreshListenable: _GoRouterRefreshStream(
-    FirebaseAuth.instance.authStateChanges(),
-  ),
+  refreshListenable: _authService.session,
 );

@@ -1,5 +1,5 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -31,15 +31,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     });
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
-      );
+      await RestApiService()
+          .requestPasswordReset(email: _emailController.text.trim());
       setState(() {
         _emailSent = true;
-      });
-    } on FirebaseAuthException catch (error) {
-      setState(() {
-        _errorMessage = error.message ?? 'שליחת האימייל נכשלה. נסה שוב.';
       });
     } catch (_) {
       setState(() {

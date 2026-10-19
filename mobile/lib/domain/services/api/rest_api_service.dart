@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rescue_app/constants/app_env.dart';
 import 'package:rescue_app/managers/storage_manager.dart';
@@ -29,17 +28,14 @@ class RestApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final String? storedAuthorization =
-              await StorageManager.instance.authorization();
+          final String? storedAccessToken =
+              await StorageManager.instance.getJwtAccessToken();
 
-          // The Firebase token is refreshed for the active session. Prefer it
-          // over a persisted value, which can be expired after the app has
-          // been closed and was causing authenticated screens to receive 401.
           if (_accessToken != null && _accessToken!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_accessToken';
-          } else if (storedAuthorization != null &&
-              storedAuthorization.isNotEmpty) {
-            options.headers['Authorization'] = storedAuthorization;
+          } else if (storedAccessToken != null &&
+              storedAccessToken.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $storedAccessToken';
           }
 
           handler.next(options);
@@ -63,6 +59,8 @@ class RestApiService {
     _refreshToken = refresh;
     _dio.options.headers['Authorization'] = 'Bearer $_accessToken';
     _dio.options.headers['Content-Type'] = 'application/json';
+    await StorageManager.instance
+        .saveJwtTokens(access: access, refresh: refresh);
   }
 
   Future<void> setAccessAuthToken({required String access}) async {
@@ -80,22 +78,19 @@ class RestApiService {
     if (hasDioHeaders()) {
       return true;
     } else {
-      final User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        final String? token = await currentUser.getIdToken();
-        if (token != null && token.isNotEmpty) {
-          await setAccessAuthToken(access: token);
-          return true;
-        }
-      }
-      return false;
+      final storedAccessToken =
+          await StorageManager.instance.getJwtAccessToken();
+      if (storedAccessToken == null || storedAccessToken.isEmpty) return false;
+      await setAccessAuthToken(access: storedAccessToken);
+      return true;
     }
   }
 
-  void clearTokens() {
+  Future<void> clearTokens() async {
     _accessToken = null;
     _refreshToken = null;
     _dio.options.headers.remove('Authorization');
+    await StorageManager.instance.clearJwtTokens();
   }
 
   Future<void> postCurrentLocation({
@@ -290,7 +285,7 @@ class RestApiService {
   }
 
   Future<void> registerDevice({
-    required String fcmToken,
+    required String pushToken,
     required String deviceId,
     required String platform,
     required String deviceModel,
@@ -301,7 +296,7 @@ class RestApiService {
       }
 
       await _dio.post('/api/notifications/token', data: {
-        'fcm_token': fcmToken,
+        'push_token': pushToken,
         'device_id': deviceId,
         'platform': platform,
         'device_model': deviceModel,
@@ -328,8 +323,36 @@ class RestApiService {
     );
 
     final tokens = JwtTokens.fromJson(_asMap(response.data));
-    setAuthToken(access: tokens.access, refresh: tokens.refresh);
+    await setAuthToken(access: tokens.access, refresh: tokens.refresh);
     return tokens;
+  }
+
+  Future<JwtTokens> register({
+    required String email,
+    required String password,
+    String fullName = '',
+  }) async {
+    final response = await _safePost(
+      '/api/auth/register/',
+      data: <String, dynamic>{
+        'email': email,
+        'password': password,
+        'full_name': fullName,
+      },
+    );
+    final tokens = JwtTokens.fromJson(_asMap(response.data));
+    await setAuthToken(access: tokens.access, refresh: tokens.refresh);
+    return tokens;
+  }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    await _safePost('/api/auth/password-reset/',
+        data: <String, dynamic>{'email': email});
+  }
+
+  Future<Map<String, dynamic>> whoAmI() async {
+    final response = await _safeGet('/api/auth/whoami/');
+    return _asMap(_asMap(response.data)['user']);
   }
 
   Future<String> refreshAccessToken({String? refreshToken}) async {
@@ -345,8 +368,22 @@ class RestApiService {
 
     final data = _asMap(response.data);
     final access = data['access'] as String;
+    final refreshedToken = data['refresh'] as String? ?? token;
     _accessToken = access;
+    _refreshToken = refreshedToken;
+    await StorageManager.instance
+        .saveJwtTokens(access: access, refresh: refreshedToken);
     return access;
+  }
+
+  Future<void> logout() async {
+    final refresh =
+        _refreshToken ?? await StorageManager.instance.getJwtRefreshToken();
+    if (refresh != null && refresh.isNotEmpty) {
+      await _safePost('/api/auth/logout/',
+          data: <String, dynamic>{'refresh': refresh});
+    }
+    await clearTokens();
   }
 
   Future<List<dynamic>> listUsers() async {

@@ -14,6 +14,7 @@ from .models import (
     Message,
     Notification,
 )
+from .permissions import is_dispatcher
 
 
 class DeviceRegistrationSerializer(serializers.Serializer):
@@ -75,7 +76,7 @@ class SessionLoginSerializer(serializers.Serializer):
         authenticated = authenticate(username=user.username, password=attrs['password'])
         if authenticated is None or not authenticated.is_active:
             raise serializers.ValidationError('Invalid credentials.')
-        if not authenticated.is_staff:
+        if not authenticated.is_staff or not is_dispatcher(authenticated):
             raise serializers.ValidationError('This account cannot access the dispatcher panel.')
         attrs['user'] = authenticated
         return attrs

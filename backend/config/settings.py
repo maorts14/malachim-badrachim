@@ -233,6 +233,14 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
+SIMPLE_JWT = {
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@rescue-alert.local')
+PASSWORD_RESET_URL = config('PASSWORD_RESET_URL', default='')
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Rescue Alert System API',
     'DESCRIPTION': (

@@ -1,10 +1,15 @@
 from django.contrib.auth import login as django_login, logout as django_logout
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db.models import Prefetch, Q
 from django.db import transaction
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema, OpenApiResponse
@@ -102,6 +107,44 @@ class JWTLogoutView(APIView):
             except TokenError:
                 pass
         return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '')
+        user = User.objects.filter(email__iexact=email).first()
+        if user is not None and settings.PASSWORD_RESET_URL:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = settings.PASSWORD_RESET_URL.format(uid=uid, token=token)
+            send_mail(
+                'Reset your Rescue Alert System password',
+                f'Use this link to reset your password: {reset_url}',
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, uid, token):
+        try:
+            user = User.objects.get(pk=force_str(urlsafe_base64_decode(uid)))
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response({'detail': 'Invalid password reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not default_token_generator.check_token(user, token):
+            return Response({'detail': 'Invalid password reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+        password = request.data.get('password', '')
+        if len(password) < 8:
+            return Response({'password': ['Ensure this field has at least 8 characters.']}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RegisterDeviceView(APIView):

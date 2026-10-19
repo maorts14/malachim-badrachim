@@ -1,7 +1,6 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:rescue_app/managers/storage_manager.dart';
+import 'package:rescue_app/domain/services/auth_service.dart';
 import 'package:rescue_app/repositories/location_repository.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'event_tab_screen.dart';
@@ -69,9 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: _subtitles[_selectedIndex],
               // The Figma reference keeps the header clear on content-focused
               // tabs. Account actions remain available from the events tab.
-              onProfilePressed: _selectedIndex == 0
-                  ? () => _showQuickActions(context)
-                  : null,
+              onProfilePressed:
+                  _selectedIndex == 0 ? () => _showQuickActions(context) : null,
             ),
             Expanded(
               // Mapbox owns a native Android surface. Keeping it mounted inside
@@ -148,8 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
       buttons: [
         DialogButton(
           onPressed: () async {
-            await FirebaseAuth.instance.signOut();
-            await StorageManager.instance.logout();
+            await AuthService().signOut();
             // if (context.mounted) {
             //   Navigator.pop(context);
             // }
@@ -197,58 +194,57 @@ class _FigmaHeader extends StatelessWidget {
             // Do not constrain the header to a fixed height: Android text
             // scaling can legitimately make its two-line title taller.
             mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 60,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      if (onProfilePressed != null)
-                        InkWell(
-                          onTap: onProfilePressed,
-                          borderRadius: BorderRadius.circular(24),
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: const BoxDecoration(
-                                color: Color(0x1AFFFFFF),
-                                shape: BoxShape.circle),
-                            alignment: Alignment.center,
-                            child: SvgPicture.asset(
-                                'assets/images/figma/figma_icon_10.svg',
-                                width: 20,
-                                height: 20),
-                          ),
-                        )
-                      else
-                        const SizedBox(width: 44, height: 44),
-                      Image.asset('assets/images/figma/raw_image_2.png',
-                          width: 81, height: 60, fit: BoxFit.contain),
-                    ],
-                  ),
+            children: [
+              SizedBox(
+                height: 60,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (onProfilePressed != null)
+                      InkWell(
+                        onTap: onProfilePressed,
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(
+                              color: Color(0x1AFFFFFF), shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: SvgPicture.asset(
+                              'assets/images/figma/figma_icon_10.svg',
+                              width: 20,
+                              height: 20),
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 44, height: 44),
+                    Image.asset('assets/images/figma/raw_image_2.png',
+                        width: 81, height: 60, fit: BoxFit.contain),
+                  ],
                 ),
-                Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(subtitle,
-                                  style: const TextStyle(
-                                      color: Color(0x99FFFFFF),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.2)),
-                              const SizedBox(height: 2),
-                              Text(title,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 23,
-                                      height: 1.25)),
-                            ]))),
-              ],
+              ),
+              Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(subtitle,
+                                style: const TextStyle(
+                                    color: Color(0x99FFFFFF),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.2)),
+                            const SizedBox(height: 2),
+                            Text(title,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 23,
+                                    height: 1.25)),
+                          ]))),
+            ],
           ),
         ),
       ),

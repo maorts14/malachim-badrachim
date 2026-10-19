@@ -4,6 +4,7 @@ from django.contrib.sessions.backends.db import SessionStore
 from django.test import TransactionTestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
 from asgiref.sync import async_to_sync, sync_to_async
 from channels.testing import WebsocketCommunicator
 
@@ -31,6 +32,9 @@ class AuthApiTests(APITestCase):
         User.objects.create_user(
             username='dispatcher', email='dispatcher@example.com', password='strongpass123', is_staff=True,
         )
+        dispatcher = User.objects.get(username='dispatcher')
+        dispatcher.userprofile.role = UserProfile.Role.EMERGENCY_DISPATCHER
+        dispatcher.userprofile.save(update_fields=['role'])
         anonymous = self.client.get('/api/auth/session/')
         self.assertFalse(anonymous.data['authenticated'])
         logged_in = self.client.post(
@@ -45,6 +49,11 @@ class AuthApiTests(APITestCase):
     def test_session_login_rejects_non_dispatcher(self):
         User.objects.create_user(username='volunteer', password='strongpass123')
         response = self.client.post('/api/auth/session/login/', {'username': 'volunteer', 'password': 'strongpass123'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_session_login_rejects_staff_without_dispatcher_role(self):
+        User.objects.create_user(username='staff-volunteer', password='strongpass123', is_staff=True)
+        response = self.client.post('/api/auth/session/login/', {'username': 'staff-volunteer', 'password': 'strongpass123'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
@@ -281,3 +290,19 @@ class RealtimeMessageContractTests(TransactionTestCase):
             return received
 
         self.assertTrue(async_to_sync(assert_nothing_and_disconnect)())
+
+    def test_assigned_volunteer_can_connect_with_a_jwt(self):
+        token = str(RefreshToken.for_user(self.volunteer).access_token)
+
+        async def connect_and_disconnect():
+            from config.asgi import application
+
+            communicator = WebsocketCommunicator(
+                application,
+                f'/ws/messages/?token={token}',
+            )
+            connected, _ = await communicator.connect()
+            await communicator.disconnect()
+            return connected
+
+        self.assertTrue(async_to_sync(connect_and_disconnect)())

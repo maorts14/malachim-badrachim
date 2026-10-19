@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +14,6 @@ import 'package:rescue_app/domain/services/location_service.dart';
 import 'package:rescue_app/domain/services/notification_service.dart';
 import 'package:rescue_app/domain/services/permission_service.dart';
 import 'package:rescue_app/localization/language_constants.dart';
-import 'package:rescue_app/logic/auth/auth_bloc.dart';
 import 'package:rescue_app/logic/locale/locale_cubit.dart';
 import 'package:rescue_app/presentation/router/app_router.dart';
 import 'package:rescue_app/repositories/group_repository.dart';
@@ -41,7 +39,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
   late final MessageRepository _messageRepository;
   late final LocationRepository _locationRepository;
   late final GroupRepository _groupRepository;
-  StreamSubscription? _authSub;
 
   @override
   void initState() {
@@ -51,7 +48,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
 
   @override
   void dispose() {
-    _authSub?.cancel();
     unawaited(_messageRepository.dispose());
     unawaited(_audioService.dispose());
     unawaited(_deepLinkService.dispose());
@@ -65,6 +61,7 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
       _authService = AuthService();
       _deepLinkService = DeepLinkService();
       _apiClient = RestApiService();
+      await _authService.restoreSession();
       _permissionService = PermissionService();
       _locationService = LocationService();
       _audioService = AudioService();
@@ -72,7 +69,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
       _messageRepository = MessageRepository(apiClient: _apiClient);
       _locationRepository = LocationRepository();
       _notificationService = NotificationService(
-        authService: _authService,
         deepLinkService: _deepLinkService,
         apiClient: _apiClient,
         deviceService: _deviceService,
@@ -82,23 +78,23 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
       await _notificationService.initialize();
 
       _deepLinkService.linkStream.listen((route) {
-        if (route != null && FirebaseAuth.instance.currentUser != null) {
+        if (route != null && _authService.isAuthenticated) {
           appRouter.go(route);
         }
       });
 
-      _authSub = _authService.authStateChanges.listen((user) async {
-        if (user == null) {
+      _authService.session.addListener(() async {
+        if (!_authService.isAuthenticated) {
           _messageRepository.stopPolling();
           return;
-        }
-        final token = await user.getIdToken();
-        if (token != null) {
-          await _apiClient.setAccessAuthToken(access: token);
         }
         await _notificationService.registerCurrentToken();
         _messageRepository.startPolling();
       });
+      if (_authService.isAuthenticated) {
+        await _notificationService.registerCurrentToken();
+        _messageRepository.startPolling();
+      }
     } catch (e) {
       debugPrint('Notification setup skipped: $e');
     }
@@ -121,10 +117,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
       child: MultiBlocProvider(
         providers: [
           BlocProvider(create: (_) => LocaleCubit()),
-          BlocProvider(
-            create: (_) =>
-                AuthBloc(authService: _authService)..add(AuthStarted()),
-          ),
         ],
         child: BlocBuilder<LocaleCubit, LocaleState>(builder: (context, state) {
           return ProviderScope(

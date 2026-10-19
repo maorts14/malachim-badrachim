@@ -72,6 +72,18 @@ When an incident occurs, the system identifies nearby available volunteers and a
 
 <h2>🚀 Getting Started</h2>
 
+<h3>Authentication configuration</h3>
+<p>
+Responder accounts are Django accounts. The Flutter app uses Django JWT access
+and refresh tokens; the dispatcher web app uses Django's CSRF-protected session
+cookie. Firebase Messaging is used only for push delivery.
+</p>
+<p>
+To enable password-reset emails, set <code>DEFAULT_FROM_EMAIL</code>, configure
+Django's email backend for the deployment, and set <code>PASSWORD_RESET_URL</code>
+to a URL template containing <code>{uid}</code> and <code>{token}</code>.
+</p>
+
 <p>
 The project is containerized with Docker to make local setup simpler and more consistent across development environments.
 </p>

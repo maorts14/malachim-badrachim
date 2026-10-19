@@ -43,7 +43,9 @@ function ProtectedLayout({
   setWindowOpen: (open: boolean) => void;
 }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/" replace />;
+  if (!user || !user.is_staff || !['manager', 'emergency_dispatcher'].includes(user.role ?? '')) {
+    return <Navigate to="/" replace />;
+  }
   return (
     <>
       <Layout setWindowOpen={setWindowOpen} />
