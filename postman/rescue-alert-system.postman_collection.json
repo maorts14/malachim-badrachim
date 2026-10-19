@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Rescue Alert System — Production",
-    "description": "Production API reference for the Rescue Alert System.\n\n## Authentication\nAll endpoints (except Firebase Auth) require a Firebase ID Token as a Bearer token:\n```\nAuthorization: Bearer <firebase_id_token>\n```\n\n**Quick start:**\n1. Set `firebase_api_key`, `user_email`, and `user_password` in collection variables.\n2. Run **Firebase Auth → Sign In** — it automatically saves the token to `firebase_token`.\n3. All other requests inherit the Bearer token from the collection.\n\nTokens expire after **1 hour**. Re-run Sign In to refresh.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `base_url` | Production API base URL |\n| `firebase_api_key` | Firebase Web API key (from Firebase console → Project Settings) |\n| `user_email` | Email of the Firebase user to authenticate as |\n| `user_password` | Password of that Firebase user |\n| `firebase_token` | ID token — **auto-set by Sign In request** |\n| `alert_id` | Alert ID for detail/update/delete requests |\n| `user_id` | UserProfile ID for detail/update/delete requests |\n| `group_id` | Group ID for detail/update/delete requests |\n| `message_id` | Message ID for detail/update/delete requests |\n| `notification_id` | Notification token record ID |\n\n## Notes\n- Django user accounts are created automatically on first authenticated request — no separate registration step.\n- `sender` on messages and `user` on notifications are set automatically from the authenticated token; do not include them in request bodies.\n- `voice_file` uploads use `multipart/form-data`; do not set `Content-Type` manually — Postman adds the boundary automatically.",
+    "description": "Production API reference for the Rescue Alert System.\n\n## Authentication\nThe API uses Django REST Framework SimpleJWT. Protected endpoints require the access token returned by this API:\n```\nAuthorization: Bearer <access_token>\n```\n\n**Quick start:**\n1. Set `user_email` and `user_password` in collection variables.\n2. If needed, run **Authentication → Register**. This creates a Django user and saves the returned token pair.\n3. Run **Authentication → Login (Obtain Tokens)**. It automatically saves `access` and `refresh` into `access_token` and `refresh_token`.\n4. Run **Authentication → Verify Current Token** before testing protected endpoints.\n\nUse **Authentication → Refresh Access Token** when an access token expires. Firebase ID tokens are not accepted by this API.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `base_url` | Production API base URL |\n| `user_email` | Django username/email used to register or sign in |\n| `user_password` | Django account password |\n| `access_token` | JWT access token — auto-set by Register, Login, and Refresh |\n| `refresh_token` | JWT refresh token — auto-set by Register and Login |\n| `alert_id` | Alert ID for detail/update/delete requests |\n| `user_id` | UserProfile ID for detail/update/delete requests |\n| `group_id` | Group ID for detail/update/delete requests |\n| `message_id` | Message ID for detail/update/delete requests |\n| `notification_id` | Notification token record ID |\n\n## Notes\n- `POST /api/auth/register/` creates the Django account; it is not created implicitly by a Firebase request.\n- `sender` on messages and `user` on notifications are set automatically from the authenticated Django user; do not include them in request bodies.\n- `voice_file` uploads use `multipart/form-data`; do not set `Content-Type` manually — Postman adds the boundary automatically.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -11,24 +11,24 @@
       "description": "Production base URL"
     },
     {
-      "key": "firebase_api_key",
-      "value": "",
-      "description": "Firebase Web API key — Firebase console → Project Settings → General → Web API Key"
-    },
-    {
       "key": "user_email",
       "value": "",
-      "description": "Email of the Firebase user to sign in as"
+      "description": "Django username/email used to register or sign in"
     },
     {
       "key": "user_password",
       "value": "",
-      "description": "Password of the Firebase user"
+      "description": "Django account password"
     },
     {
-      "key": "firebase_token",
+      "key": "access_token",
       "value": "",
-      "description": "Firebase ID token — auto-set by the Sign In request. Valid for 1 hour."
+      "description": "JWT access token — auto-set by Register, Login, and Refresh"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "description": "JWT refresh token — auto-set by Register and Login"
     },
     {
       "key": "alert_id",
@@ -61,18 +61,18 @@
     "bearer": [
       {
         "key": "token",
-        "value": "{{firebase_token}}",
+        "value": "{{access_token}}",
         "type": "string"
       }
     ]
   },
   "item": [
     {
-      "name": "Firebase Auth",
-      "description": "Obtain a Firebase ID token. Run Sign In first to populate `firebase_token` — all other folders inherit it automatically.\n\nTokens expire after 1 hour. Re-run Sign In to get a fresh one.\n\nIf your Firebase project has Email/Password auth disabled, obtain the token from the mobile app via `user.getIdToken()` and paste it into the `firebase_token` variable manually.",
+      "name": "Authentication",
+      "description": "Django SimpleJWT authentication. Run **Register** for a new account or **Login (Obtain Tokens)** for an existing account. Both save `access_token` and `refresh_token`; all other folders inherit the access token.\n\nUse **Verify Current Token** to confirm authentication before testing another endpoint, and **Refresh Access Token** when needed.",
       "item": [
         {
-          "name": "Sign In (Email + Password)",
+          "name": "Register",
           "event": [
             {
               "listen": "test",
@@ -80,11 +80,12 @@
                 "type": "text/javascript",
                 "exec": [
                   "const r = pm.response.json();",
-                  "if (r.idToken) {",
-                  "    pm.collectionVariables.set('firebase_token', r.idToken);",
-                  "    console.log('firebase_token saved. Expires in: ' + r.expiresIn + 's');",
+                  "if (r.access && r.refresh) {",
+                  "    pm.collectionVariables.set('access_token', r.access);",
+                  "    pm.collectionVariables.set('refresh_token', r.refresh);",
+                  "    console.log('Django JWT token pair saved.');",
                   "} else {",
-                  "    console.error('Sign in failed:', JSON.stringify(r));",
+                  "    console.error('Registration failed:', JSON.stringify(r));",
                   "}"
                 ]
               }
@@ -98,42 +99,34 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"returnSecureToken\": true\n}"
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"full_name\": \"Example Responder\"\n}"
             },
             "url": {
-              "raw": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={{firebase_api_key}}",
-              "protocol": "https",
-              "host": ["identitytoolkit", "googleapis", "com"],
-              "path": ["v1", "accounts:signInWithPassword"],
-              "query": [
-                {
-                  "key": "key",
-                  "value": "{{firebase_api_key}}",
-                  "description": "Firebase Web API key"
-                }
-              ]
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register", ""]
             },
-            "description": "Signs in a Firebase user with email and password. On success the test script automatically saves `idToken` to the `firebase_token` collection variable so all subsequent requests are authenticated.\n\nRequires Email/Password sign-in enabled in Firebase console → Authentication → Sign-in providers."
+            "description": "Creates a Django user and profile through `POST /api/auth/register/`. On success, the test script saves the returned SimpleJWT access and refresh tokens for all subsequent requests. `full_name` and `invite_code` are optional."
           },
           "response": [
             {
-              "name": "200 OK",
-              "status": "OK",
-              "code": 200,
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"kind\": \"identitytoolkit#VerifyPasswordResponse\",\n  \"localId\": \"<firebase_uid>\",\n  \"email\": \"user@example.com\",\n  \"displayName\": \"\",\n  \"idToken\": \"<firebase_id_token>\",\n  \"registered\": true,\n  \"refreshToken\": \"<refresh_token>\",\n  \"expiresIn\": \"3600\"\n}"
+              "body": "{\n  \"access\": \"<jwt_access_token>\",\n  \"refresh\": \"<jwt_refresh_token>\",\n  \"user\": {\n    \"id\": 42,\n    \"username\": \"user@example.com\",\n    \"email\": \"user@example.com\",\n    \"name\": \"Example Responder\",\n    \"role\": \"user\",\n    \"is_staff\": false\n  }\n}"
             },
             {
-              "name": "400 Invalid credentials",
+              "name": "400 Duplicate or invalid registration",
               "status": "Bad Request",
               "code": 400,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"INVALID_LOGIN_CREDENTIALS\",\n    \"errors\": [{ \"message\": \"INVALID_LOGIN_CREDENTIALS\", \"domain\": \"global\", \"reason\": \"invalid\" }]\n  }\n}"
+              "body": "{\n  \"email\": [\n    \"An account with this email already exists.\"\n  ]\n}"
             }
           ]
         },
         {
-          "name": "Refresh Token",
+          "name": "Login (Obtain Tokens)",
           "event": [
             {
               "listen": "test",
@@ -141,11 +134,12 @@
                 "type": "text/javascript",
                 "exec": [
                   "const r = pm.response.json();",
-                  "if (r.id_token) {",
-                  "    pm.collectionVariables.set('firebase_token', r.id_token);",
-                  "    console.log('firebase_token refreshed.');",
+                  "if (r.access && r.refresh) {",
+                  "    pm.collectionVariables.set('access_token', r.access);",
+                  "    pm.collectionVariables.set('refresh_token', r.refresh);",
+                  "    console.log('Django JWT token pair saved.');",
                   "} else {",
-                  "    console.error('Refresh failed:', JSON.stringify(r));",
+                  "    console.error('Login failed:', JSON.stringify(r));",
                   "}"
                 ]
               }
@@ -155,32 +149,90 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
-                { "key": "grant_type", "value": "refresh_token" },
-                { "key": "refresh_token", "value": "<paste_refresh_token_from_sign_in_response>" }
-              ]
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
             },
             "url": {
-              "raw": "https://securetoken.googleapis.com/v1/token?key={{firebase_api_key}}",
-              "protocol": "https",
-              "host": ["securetoken", "googleapis", "com"],
-              "path": ["v1", "token"],
-              "query": [
-                { "key": "key", "value": "{{firebase_api_key}}" }
-              ]
+              "raw": "{{base_url}}/api/token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", ""]
             },
-            "description": "Use the `refresh_token` from a previous Sign In response to get a new `id_token` without re-entering credentials. The test script auto-saves the new token to `firebase_token`.\n\nUseful for long-running test sessions where the 1-hour token has expired."
+            "description": "Obtains a SimpleJWT access/refresh token pair from an existing Django account. The endpoint accepts the Django username; newly registered accounts use their email address as the username."
           },
           "response": [
             {
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"access_token\": \"<new_id_token>\",\n  \"expires_in\": \"3600\",\n  \"token_type\": \"Bearer\",\n  \"refresh_token\": \"<new_refresh_token>\",\n  \"id_token\": \"<new_id_token>\",\n  \"user_id\": \"<firebase_uid>\",\n  \"project_id\": \"<firebase_project_id>\"\n}"
+              "body": "{\n  \"access\": \"<jwt_access_token>\",\n  \"refresh\": \"<jwt_refresh_token>\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Refresh Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r.access) {",
+                  "    pm.collectionVariables.set('access_token', r.access);",
+                  "    console.log('Django JWT access token refreshed.');",
+                  "} else {",
+                  "    console.error('Token refresh failed:', JSON.stringify(r));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", "refresh", ""]
+            },
+            "description": "Exchanges a valid SimpleJWT refresh token for a new access token. The test script replaces only `access_token`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"access\": \"<new_jwt_access_token>\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Verify Current Token",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/whoami/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "whoami", ""]
+            },
+            "description": "Confirms that the collection's inherited Bearer access token is accepted by the API."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"authenticated\": true,\n  \"user\": {\n    \"id\": 42,\n    \"username\": \"user@example.com\",\n    \"email\": \"user@example.com\",\n    \"name\": \"Example Responder\",\n    \"role\": \"user\",\n    \"is_staff\": false\n  }\n}"
             }
           ]
         }
@@ -403,7 +455,7 @@
     },
     {
       "name": "User Profiles",
-      "description": "Manage user profiles and locations. Django accounts are created automatically on first Firebase-authenticated request — there is no separate registration endpoint.\n\n**Role values:** `user` (volunteer, default), `emergency_dispatcher`, `manager`. Only managers can change roles or administer profiles.\n\nProfile fields exposed: `id` (profile ID), `user_id` (Django account ID required by alert dispatch), `username` (Firebase UID), `email`, `display_name`, `phone`, `role`, `latitude`, `longitude`.",
+      "description": "Manage user profiles and locations. Create Django accounts with `POST /api/auth/register/`, then authenticate with a Django JWT.\n\n**Role values:** `user` (volunteer, default), `emergency_dispatcher`, `manager`. Only managers can change roles or administer profiles.\n\nProfile fields exposed: `id` (profile ID), `user_id` (Django account ID required by alert dispatch), `username` (the Django username), `email`, `display_name`, `phone`, `role`, `latitude`, `longitude`.",
       "item": [
         {
           "name": "List All User Profiles",
@@ -754,7 +806,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "group", "{{group_id}}", "add_user", ""]
             },
-            "description": "Add a user to an existing group. `user_id` is the Django User ID (the `id` from a UserProfile response, not the Firebase UID)."
+            "description": "Add a user to an existing group. `user_id` is the Django User ID returned as `user_id` by a UserProfile response."
           },
           "response": [
             {
@@ -973,7 +1025,7 @@
     },
     {
       "name": "Device Registration",
-      "description": "Register a mobile device for Firebase Cloud Messaging (FCM) push notifications.\n\nThis is the **preferred** endpoint for new integrations. It supports multiple devices per user, platform tagging, and upserts on re-registration (same `firebase_uid` + `device_id` pair updates the `fcm_token`).\n\nAuthentication is handled by reading the Bearer token directly — not via DRF's `IsAuthenticated`, so a Firebase token must still be provided.",
+      "description": "Register a mobile device for push notifications. This endpoint requires the same Django JWT Bearer token as the rest of the API.\n\nIt supports multiple devices per user, platform tagging, and upserts on re-registration: the same authenticated Django user and `device_id` update the stored `push_token`.",
       "item": [
         {
           "name": "Register / Update Device",
@@ -984,14 +1036,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fcm_token\": \"<firebase_cloud_messaging_token>\",\n  \"device_id\": \"unique-device-identifier\",\n  \"platform\": \"android\",\n  \"device_model\": \"Samsung Galaxy S24\"\n}"
+              "raw": "{\n  \"push_token\": \"<push_notification_token>\",\n  \"device_id\": \"unique-device-identifier\",\n  \"platform\": \"android\",\n  \"device_model\": \"Samsung Galaxy S24\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/notifications/token",
               "host": ["{{base_url}}"],
               "path": ["api", "notifications", "token"]
             },
-            "description": "Register or update a device for push notifications.\n\n**Required fields:** `fcm_token`, `device_id`, `platform`\n\n**platform options:** `android`, `ios`, `other`\n\n**device_model:** Optional. Human-readable device name.\n\nIf the same `device_id` is already registered for this Firebase user the `fcm_token` is updated (upsert). Returns 204 on success."
+            "description": "Register or update a device for push notifications.\n\n**Required fields:** `push_token`, `device_id`, `platform`\n\n**platform options:** `android`, `ios`, `other`\n\n**device_model:** Optional. Human-readable device name.\n\nIf the same `device_id` is already registered for the authenticated Django user, its `push_token` is updated. Returns 204 on success."
           },
           "response": [
             {
@@ -1004,7 +1056,7 @@
               "name": "400 Bad Request — missing required fields",
               "status": "Bad Request",
               "code": 400,
-              "body": "{\n  \"fcm_token\": [\"This field is required.\"],\n  \"device_id\": [\"This field is required.\"],\n  \"platform\": [\"This field is required.\"]\n}"
+              "body": "{\n  \"push_token\": [\"This field is required.\"],\n  \"device_id\": [\"This field is required.\"],\n  \"platform\": [\"This field is required.\"]\n}"
             },
             {
               "name": "401 Unauthorized — invalid or missing token",
