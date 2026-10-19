@@ -1,7 +1,9 @@
 from django.contrib.auth.models import User
 from django.contrib.gis.geos import Point
 from django.contrib.sessions.backends.db import SessionStore
+from django.core import mail
 from django.test import TransactionTestCase
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -55,6 +57,19 @@ class AuthApiTests(APITestCase):
         User.objects.create_user(username='staff-volunteer', password='strongpass123', is_staff=True)
         response = self.client.post('/api/auth/session/login/', {'username': 'staff-volunteer', 'password': 'strongpass123'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(
+        PASSWORD_RESET_URL='https://rescue.example/reset/{uid}/{token}',
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    )
+    def test_password_reset_request_does_not_expose_account_existence(self):
+        User.objects.create_user(username='reset@example.com', email='reset@example.com', password='strongpass123')
+        existing = self.client.post('/api/auth/password-reset/', {'email': 'reset@example.com'}, format='json')
+        unknown = self.client.post('/api/auth/password-reset/', {'email': 'unknown@example.com'}, format='json')
+        self.assertEqual(existing.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(unknown.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('https://rescue.example/reset/', mail.outbox[0].body)
 
 
 class AlertDispatchContractTests(APITestCase):

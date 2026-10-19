@@ -40,6 +40,36 @@ class RestApiService {
 
           handler.next(options);
         },
+        onError: (error, handler) async {
+          final request = error.requestOptions;
+          final isTokenRoute = request.path.startsWith('/api/token/');
+          if (error.response?.statusCode != 401 ||
+              request.extra['jwtRetried'] == true ||
+              isTokenRoute) {
+            handler.next(error);
+            return;
+          }
+
+          final refresh = _refreshToken ??
+              await StorageManager.instance.getJwtRefreshToken();
+          if (refresh == null || refresh.isEmpty) {
+            await clearTokens();
+            handler.next(error);
+            return;
+          }
+
+          try {
+            final refreshedAccess =
+                await refreshAccessToken(refreshToken: refresh);
+            request.headers['Authorization'] = 'Bearer $refreshedAccess';
+            request.extra['jwtRetried'] = true;
+            final replay = await _dio.fetch(request);
+            handler.resolve(replay);
+          } catch (_) {
+            await clearTokens();
+            handler.next(error);
+          }
+        },
       ),
     );
   }

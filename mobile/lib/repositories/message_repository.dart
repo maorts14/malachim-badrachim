@@ -96,8 +96,9 @@ class MessageRepository {
   void _handleRealtimeEvent(dynamic rawEvent) {
     try {
       final event = jsonDecode(rawEvent as String) as Map<String, dynamic>;
-      if (event['type'] != 'message.created' || event['message'] is! Map)
+      if (event['type'] != 'message.created' || event['message'] is! Map) {
         return;
+      }
       final message = Message.fromJson(
         Map<String, dynamic>.from(event['message'] as Map),
       );
