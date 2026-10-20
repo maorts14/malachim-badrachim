@@ -25,8 +25,25 @@ for local development and tests.
 ## Start the backend, database, and admin panel
 
 ```powershell
-docker compose --env-file .env.local -f docker-compose.local.yml up --build
+.\scripts\dev.ps1 up
 ```
+
+This is the supported local-development entry point. It starts PostGIS, Redis,
+the Django API, and the Vite admin panel. It is deliberately separate from the
+root `docker-compose.yml`, which is production-oriented and does not start a
+long-lived Vite development server by default.
+
+Use the helper commands below for the rest of the local lifecycle:
+
+```powershell
+.\scripts\dev.ps1 status  # show container state and health
+.\scripts\dev.ps1 down    # stop the local stack
+.\scripts\dev.ps1 reset   # delete local Docker volumes, then start again
+```
+
+`reset` permanently removes the local PostGIS and admin-panel Docker volumes.
+It never touches remote environments, but it does delete local development
+data.
 
 - API: `http://localhost:8004/api/`
 - Admin panel: `http://localhost:5173/`
@@ -39,12 +56,11 @@ deployment needs an upgrade path. If you previously ran the old migration
 chain, recreate the local Compose data once before starting the stack again:
 
 ```powershell
-docker compose --env-file .env.local -f docker-compose.local.yml down --volumes
-docker compose --env-file .env.local -f docker-compose.local.yml up --build
+.\scripts\dev.ps1 reset
 ```
 
 This removes local development data and Docker volumes; it does not affect a
-remote environment.
+remote environment. The command asks for confirmation before deleting anything.
 
 ## Run the Android app
 

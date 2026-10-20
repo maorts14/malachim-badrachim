@@ -107,12 +107,14 @@ PostGIS service supplied by Docker Compose.</p>
 <pre>
 git clone https://github.com/ShimonNavon/rescue-alert-system.git
 cd rescue-alert-system
-cp .env.example .env
-docker compose --profile dev up --build
+.\scripts\dev.ps1 up
 </pre>
 
 <p>
-The <code>dev</code> profile adds the Vite dev server for the admin panel. Without it (<code>docker compose up --build</code>) only the backend and database start — which is how production runs, since nginx serves the built panel there.
+The supported local-development path starts PostGIS, Redis, the Django backend,
+and the Vite admin panel together. Follow <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>
+for the one-time local configuration, status, shutdown, reset, and mobile-app
+commands.
 </p>
 
 <h3>Run Migrations</h3>
@@ -136,8 +138,8 @@ recreated from scratch when adopting this baseline. Do not rely on
 <h3>Service URLs</h3>
 
 <ul>
-  <li><strong>Backend API:</strong> <code>http://127.0.0.1:8004</code> (gunicorn on port 8000 inside the container)</li>
-  <li><strong>Admin Panel:</strong> <code>http://localhost:5173</code> (<code>dev</code> profile only)</li>
+  <li><strong>Backend API:</strong> <code>http://localhost:8004</code> (Daphne on port 8000 inside the container)</li>
+  <li><strong>Admin Panel:</strong> <code>http://localhost:5173</code></li>
   <li><strong>API docs:</strong> <code>http://127.0.0.1:8004/api/docs/</code></li>
 </ul>
 
@@ -162,7 +164,10 @@ npm run dev
 
 <h3>Run with Docker Compose</h3>
 
-<p>The admin panel lives behind the <code>dev</code> profile: <code>docker compose --profile dev up --build</code>.</p>
+<p>For local work, use <code>.\scripts\dev.ps1 up</code> after completing the
+configuration in <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>. The root Compose
+file is production-oriented; it leaves the Vite server out by default because
+nginx serves the built panel in production.</p>
 
 <hr>
 
