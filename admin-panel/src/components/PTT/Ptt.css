@@ -1,0 +1,13 @@
+
+.ptt { padding: 24px; color: var(--text-primary, #172033); }
+.ptt__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ptt__header h1, .ptt h2 { margin: 0; }.ptt__header p { margin: 6px 0 18px; color: #637083; }
+.ptt__layout { display: grid; grid-template-columns: 190px minmax(0, 1fr) 230px; gap: 16px; }
+.ptt__groups, .ptt__conversation, .ptt__manage { border: 1px solid #dbe1ea; border-radius: 12px; background: #fff; padding: 14px; }
+.ptt__groups { display: flex; flex-direction: column; gap: 8px; }.ptt__group { border: 0; border-radius: 8px; padding: 10px; background: #f3f5f8; text-align: right; cursor: pointer; }.ptt__group--active { background: #dceee6; color: #0d6544; }.ptt__group small { display: block; color: #637083; margin-top: 3px; }
+.ptt__messages { min-height: 280px; max-height: 430px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }.ptt__message { background: #f3f5f8; border-radius: 8px; padding: 10px; }.ptt__message time { display: block; font-size: .75rem; color: #637083; margin-top: 3px; }.ptt__message p { margin: 8px 0; }.ptt__message audio { width: 100%; margin-top: 8px; }
+.ptt__composer { display: flex; gap: 8px; margin-top: 14px; }.ptt input { min-width: 0; padding: 9px; border: 1px solid #b9c4d2; border-radius: 7px; }.ptt__composer input { flex: 1; }.ptt button { border: 0; border-radius: 7px; padding: 9px 12px; cursor: pointer; background: #0e7a54; color: #fff; }.ptt button:disabled { opacity: .55; cursor: not-allowed; }
+.ptt__transmit { width: 100%; margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 8px; }.ptt__transmit--recording { background: #b72d2d !important; }.ptt__icon-button { background: transparent !important; color: #0e7a54 !important; }.ptt__manage { display: flex; flex-direction: column; gap: 9px; }.ptt__manage label { display: flex; align-items: center; gap: 8px; }.ptt__manage hr { width: 100%; border: 0; border-top: 1px solid #dbe1ea; }.ptt__state, .ptt__error { padding: 12px; }.ptt__error { background: #feeceb; color: #9c1c1c; border-radius: 8px; }
+.ptt__empty { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }.ptt__empty button { white-space: nowrap; }
+@media (max-width: 900px) { .ptt__layout { grid-template-columns: 1fr; }.ptt__groups { flex-direction: row; flex-wrap: wrap; }.ptt__group { min-width: 140px; } }
+
