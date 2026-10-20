@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:rescue_app/domain/routing/app_route_paths.dart';
 
 class DeepLinkService {
   DeepLinkService({AppLinks? appLinks}) : _appLinks = appLinks ?? AppLinks() {
@@ -28,19 +29,15 @@ class DeepLinkService {
     });
   }
 
-  String _routeFromUri(Uri uri) {
-    if (uri.host == 'events' && uri.pathSegments.isNotEmpty) {
-      return '/events/${uri.pathSegments.first}';
-    }
-    if (uri.host == 'reset-password' && uri.pathSegments.length == 2) {
-      return '/reset-password/${uri.pathSegments[0]}/${uri.pathSegments[1]}';
-    }
-    return uri.path;
-  }
+  String? _routeFromUri(Uri uri) => AppRoutePaths.locationFromIncomingUri(uri);
 
   void setPendingRoute(String route) {
-    _pendingRoute = route;
-    _links.add(route);
+    final supportedRoute = AppRoutePaths.locationFromIncomingUri(
+      Uri.tryParse(route) ?? Uri(),
+    );
+    if (supportedRoute == null) return;
+    _pendingRoute = supportedRoute;
+    _links.add(supportedRoute);
   }
 
   String? consumePendingRoute() {

@@ -176,8 +176,6 @@ class NotificationService {
   String? _routeFromData(Map<String, dynamic> data) {
     final deepLink = data['deepLink']?.toString();
     if (deepLink != null && deepLink.isNotEmpty) return deepLink;
-    final messageId = data['messageId']?.toString();
-    if (messageId != null) return '/messages/$messageId';
     return null;
   }
 

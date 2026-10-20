@@ -82,8 +82,10 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
     }
 
     _deepLinkSubscription = _deepLinkService.linkStream.listen((route) {
-      if (route != null && _authService.isAuthenticated) {
-        appRouter.go(route);
+      if (route == null) return;
+      if (_authService.isAuthenticated ||
+          AppRoutePaths.isPublicLocation(Uri.parse(route))) {
+        _openPendingRoute();
       }
     });
 
@@ -91,6 +93,7 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
     if (_authService.isAuthenticated) {
       await _notificationService.registerCurrentToken();
       _messageRepository.startPolling();
+      _openPendingRoute();
     }
     try {
       await _permissionService.requestStartupPermissions();
@@ -105,6 +108,13 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
       return;
     }
     unawaited(_registerAuthenticatedSession());
+    _openPendingRoute();
+  }
+
+  void _openPendingRoute() {
+    final route = _deepLinkService.consumePendingRoute();
+    if (route == null) return;
+    appRouter.go(route);
   }
 
   Future<void> _registerAuthenticatedSession() async {

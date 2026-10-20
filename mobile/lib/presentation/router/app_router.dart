@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:rescue_app/domain/services/auth_service.dart';
+import 'package:rescue_app/domain/routing/app_route_paths.dart';
 import 'package:rescue_app/screens/home_screen.dart';
 import 'package:rescue_app/screens/forgot_password_screen.dart';
 import 'package:rescue_app/screens/reset_password_screen.dart';
@@ -7,46 +8,7 @@ import 'package:rescue_app/screens/sign_in_screen.dart';
 import 'package:rescue_app/screens/sign_up_screen.dart';
 import 'package:rescue_app/screens/event_detail_screen.dart';
 
-class AppRoutePaths {
-  const AppRoutePaths._();
-
-  static const String home = '/';
-  static const String signIn = '/sign-in';
-  static const String signUp = '/sign-up';
-  static const String forgotPassword = '/forgot-password';
-  static const String resetPassword = '/reset-password';
-  static const String users = '/users';
-  static const String events = '/events';
-  static const String ptt = '/ptt';
-  static const String groups = '/groups';
-  static const String createEvent = '/events/create';
-  static const String eventDetails = '/events/details';
-  static const String eventChat = '/events/chat';
-  static const String userManagement = '/users/manage';
-}
-
-class EventDeepLink {
-  const EventDeepLink({required this.eventId});
-
-  final String eventId;
-
-  static EventDeepLink? tryParse(String url) {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return null;
-
-    // Supported format example: rescue://events/123
-    if (uri.host == 'events' && uri.pathSegments.isNotEmpty) {
-      return EventDeepLink(eventId: uri.pathSegments.first);
-    }
-
-    // Supported format example: https://app.rescue/events/123
-    if (uri.pathSegments.length >= 2 && uri.pathSegments.first == 'events') {
-      return EventDeepLink(eventId: uri.pathSegments[1]);
-    }
-
-    return null;
-  }
-}
+export 'package:rescue_app/domain/routing/app_route_paths.dart';
 
 final AuthService _authService = AuthService();
 
@@ -77,28 +39,17 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
-      path: '/events/:id',
+      path: AppRoutePaths.eventDetailsPattern,
       builder: (context, state) => EventDetailLoaderScreen(
         eventId: int.parse(state.pathParameters['id']!),
       ),
     ),
   ],
   redirect: (context, state) {
-    final bool isLoggedIn = _authService.isAuthenticated;
-    final bool isAuthRoute = state.matchedLocation == AppRoutePaths.signIn ||
-        state.matchedLocation == AppRoutePaths.signUp ||
-        state.matchedLocation == AppRoutePaths.forgotPassword ||
-        state.matchedLocation.startsWith(AppRoutePaths.resetPassword);
-
-    if (!isLoggedIn && !isAuthRoute) {
-      return AppRoutePaths.signIn;
-    }
-
-    if (isLoggedIn && isAuthRoute) {
-      return AppRoutePaths.home;
-    }
-
-    return null;
+    return AppRouteRedirect.forLocation(
+      isAuthenticated: _authService.isAuthenticated,
+      location: state.uri,
+    );
   },
   refreshListenable: _authService.session,
 );
