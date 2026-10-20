@@ -405,6 +405,72 @@ class PttRoomTokenTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
+class SharedApiContractTests(APITestCase):
+    """Protect the payload examples consumed by the two supported clients."""
+
+    def setUp(self):
+        self.dispatcher = User.objects.create_user(username='contract-dispatcher')
+        self.dispatcher.userprofile.role = UserProfile.Role.MANAGER
+        self.dispatcher.userprofile.save(update_fields=['role'])
+        self.member = User.objects.create_user(username='contract-member')
+        self.client.force_authenticate(self.dispatcher)
+
+    def test_alert_group_and_message_responses_match_the_shared_contract_shape(self):
+        alert_response = self.client.post(
+            '/api/alerts/',
+            {
+                'title': 'Contract incident',
+                'description': 'Example',
+                'latitude': 32.0853,
+                'longitude': 34.7818,
+                'priority': 'HIGH',
+            },
+            format='json',
+        )
+        self.assertEqual(alert_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(set(alert_response.data), {
+            'id', 'title', 'description', 'latitude', 'longitude', 'status', 'priority',
+            'created_at', 'updated_at', 'assignments',
+        })
+        self.assertIn(alert_response.data['status'], {'OPEN', 'DISPATCHED', 'ACCEPTED', 'IN_PROGRESS', 'RESOLVED', 'CANCELLED'})
+
+        group_response = self.client.post(
+            '/api/group/',
+            {'name': 'Contract group', 'members': [self.member.id]},
+            format='json',
+        )
+        self.assertEqual(group_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(set(group_response.data), {'id', 'name', 'members'})
+        self.assertEqual(group_response.data['members'], [self.member.id])
+
+        message_response = self.client.post(
+            '/api/message/',
+            {
+                'alert': alert_response.data['id'],
+                'title': 'Contract message',
+                'text': 'Proceed',
+            },
+            format='json',
+        )
+        self.assertEqual(message_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(set(message_response.data), {
+            'id', 'sender', 'alert', 'group', 'title', 'text', 'latitude', 'longitude', 'timestamp',
+        })
+        self.assertIsNone(message_response.data['group'])
+        self.assertIsNone(message_response.data['latitude'])
+        self.assertIsNone(message_response.data['longitude'])
+
+    def test_authentication_and_device_registration_failures_remain_machine_readable(self):
+        anonymous = APIClient()
+        unauthorized = anonymous.get('/api/alerts/')
+        self.assertEqual(unauthorized.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('detail', unauthorized.data)
+
+        invalid_device = self.client.post('/api/notifications/token', {}, format='json')
+        self.assertEqual(invalid_device.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(invalid_device.data)
+
+
 class RealtimeMessageContractTests(TransactionTestCase):
     def setUp(self):
         self.dispatcher = User.objects.create_user(username='socket-dispatcher')

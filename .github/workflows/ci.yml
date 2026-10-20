@@ -44,6 +44,13 @@ jobs:
       - name: Run Django API contract suite
         working-directory: backend
         run: python manage.py test alerts --verbosity 2
+      - name: Detect OpenAPI schema drift
+        working-directory: backend
+        run: |
+          python manage.py spectacular --file ../contracts/openapi.generated.yaml
+          diff -u ../contracts/openapi.yaml ../contracts/openapi.generated.yaml
+      - name: Validate Postman collection JSON
+        run: python -m json.tool postman/rescue-alert-system.postman_collection.json > /dev/null
 
   admin:
     name: Admin panel lint and build
@@ -64,6 +71,9 @@ jobs:
       - name: Production build
         working-directory: admin-panel
         run: npm run build
+      - name: Admin API contract tests
+        working-directory: admin-panel
+        run: npm test
       - name: Production dependency audit
         working-directory: admin-panel
         run: npm audit --omit=dev --audit-level=high
