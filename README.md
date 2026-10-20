@@ -123,6 +123,16 @@ The <code>dev</code> profile adds the Vite dev server for the admin panel. Witho
 docker compose exec backend python manage.py migrate
 </pre>
 
+<h3>Database migration support</h3>
+
+<p>
+The current migration set is the supported baseline for fresh PostGIS databases.
+Upgrade paths from the project's historic migration chains are not supported yet.
+Because the application has not been deployed, local development databases may be
+recreated from scratch when adopting this baseline. Do not rely on
+<code>migrate</code> to convert a database created by an earlier migration history.
+</p>
+
 <h3>Service URLs</h3>
 
 <ul>
