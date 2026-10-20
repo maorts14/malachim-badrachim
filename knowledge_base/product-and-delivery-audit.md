@@ -1,4 +1,4 @@
-# Product and delivery audit — 2026-10-18
+# Product and delivery audit
 
 ## Product boundary
 

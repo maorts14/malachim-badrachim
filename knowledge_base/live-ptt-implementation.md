@@ -1,4 +1,4 @@
-# Live PTT implementation — 2026-10-20
+# Live PTT implementation
 
 ## Decision
 
