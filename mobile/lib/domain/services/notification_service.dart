@@ -50,8 +50,6 @@ class NotificationService {
       sound: true,
     );
 
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-
     _tokenRefreshSub = messaging.onTokenRefresh.listen(_registerToken);
     _foregroundSub = FirebaseMessaging.onMessage.listen(
       _handleForegroundMessage,

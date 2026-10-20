@@ -201,6 +201,14 @@ class AlertDispatchContractTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([group['name'] for group in response.data], ['Visible group'])
+        self.assertEqual(
+            response.data[0],
+            {
+                'id': visible_group.id,
+                'name': 'Visible group',
+                'members': [self.volunteer.id],
+            },
+        )
 
     def test_volunteer_can_post_only_to_a_group_they_belong_to(self):
         member_group = Group.objects.create(name='PTT responders')

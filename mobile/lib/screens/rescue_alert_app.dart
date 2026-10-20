@@ -39,15 +39,33 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
   late final MessageRepository _messageRepository;
   late final LocationRepository _locationRepository;
   late final GroupRepository _groupRepository;
+  StreamSubscription<String?>? _deepLinkSubscription;
 
   @override
   void initState() {
     super.initState();
+    _authService = AuthService();
+    _deepLinkService = DeepLinkService();
+    _apiClient = RestApiService();
+    _permissionService = PermissionService();
+    _locationService = LocationService();
+    _audioService = AudioService();
+    _deviceService = DeviceService();
+    _messageRepository = MessageRepository(apiClient: _apiClient);
+    _locationRepository = LocationRepository();
+    _groupRepository = GroupRepository(apiClient: _apiClient);
+    _notificationService = NotificationService(
+      deepLinkService: _deepLinkService,
+      apiClient: _apiClient,
+      deviceService: _deviceService,
+    );
     _bootstrap();
   }
 
   @override
   void dispose() {
+    unawaited(_deepLinkSubscription?.cancel());
+    _authService.session.removeListener(_onSessionChanged);
     unawaited(_messageRepository.dispose());
     unawaited(_audioService.dispose());
     unawaited(_deepLinkService.dispose());
@@ -58,47 +76,41 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
 
   Future<void> _bootstrap() async {
     try {
-      _authService = AuthService();
-      _deepLinkService = DeepLinkService();
-      _apiClient = RestApiService();
       await _authService.restoreSession();
-      _permissionService = PermissionService();
-      _locationService = LocationService();
-      _audioService = AudioService();
-      _deviceService = DeviceService();
-      _messageRepository = MessageRepository(apiClient: _apiClient);
-      _locationRepository = LocationRepository();
-      _notificationService = NotificationService(
-        deepLinkService: _deepLinkService,
-        apiClient: _apiClient,
-        deviceService: _deviceService,
-      );
-
-      _groupRepository = GroupRepository(apiClient: _apiClient);
       await _notificationService.initialize();
-
-      _deepLinkService.linkStream.listen((route) {
-        if (route != null && _authService.isAuthenticated) {
-          appRouter.go(route);
-        }
-      });
-
-      _authService.session.addListener(() async {
-        if (!_authService.isAuthenticated) {
-          _messageRepository.stopPolling();
-          return;
-        }
-        await _notificationService.registerCurrentToken();
-        _messageRepository.startPolling();
-      });
-      if (_authService.isAuthenticated) {
-        await _notificationService.registerCurrentToken();
-        _messageRepository.startPolling();
-      }
     } catch (e) {
-      debugPrint('Notification setup skipped: $e');
+      debugPrint('Optional startup service setup skipped: $e');
     }
-    await _permissionService.requestStartupPermissions();
+
+    _deepLinkSubscription = _deepLinkService.linkStream.listen((route) {
+      if (route != null && _authService.isAuthenticated) {
+        appRouter.go(route);
+      }
+    });
+
+    _authService.session.addListener(_onSessionChanged);
+    if (_authService.isAuthenticated) {
+      await _notificationService.registerCurrentToken();
+      _messageRepository.startPolling();
+    }
+    try {
+      await _permissionService.requestStartupPermissions();
+    } catch (e) {
+      debugPrint('Startup permission request skipped: $e');
+    }
+  }
+
+  void _onSessionChanged() {
+    if (!_authService.isAuthenticated) {
+      _messageRepository.stopPolling();
+      return;
+    }
+    unawaited(_registerAuthenticatedSession());
+  }
+
+  Future<void> _registerAuthenticatedSession() async {
+    await _notificationService.registerCurrentToken();
+    _messageRepository.startPolling();
   }
 
   @override

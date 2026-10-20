@@ -6,8 +6,12 @@ import 'package:rescue_app/models/alert_message.dart';
 import 'package:rescue_app/widgets/event_list.dart';
 import 'package:rescue_app/screens/event_detail_screen.dart';
 
+typedef AlertsLoader = Future<List<AlertMessage>> Function();
+
 class EventTabScreen extends StatefulWidget {
-  const EventTabScreen({super.key});
+  const EventTabScreen({this.loadAlerts, super.key});
+
+  final AlertsLoader? loadAlerts;
 
   @override
   State<EventTabScreen> createState() => _EventTabScreenState();
@@ -78,9 +82,9 @@ class _EventTabScreenState extends State<EventTabScreen> {
       });
     }
     try {
-      final alertsResult = await RestApiService()
-          .getAllAlerts()
-          .timeout(const Duration(seconds: 25));
+      final alertsResult =
+          await (widget.loadAlerts?.call() ?? RestApiService().getAllAlerts())
+              .timeout(const Duration(seconds: 25));
       if (!mounted) return;
       setState(() {
         openEvents

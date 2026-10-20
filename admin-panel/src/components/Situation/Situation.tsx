@@ -28,7 +28,11 @@ export default function Situation() {
     }
   };
 
-  useEffect(() => { void loadUsers(); }, []);
+  useEffect(() => {
+    // Run after the effect has committed. The request updates local UI state
+    // only when it settles, rather than synchronously from the effect body.
+    void Promise.resolve().then(loadUsers);
+  }, []);
 
   // Robust parser: handles Date object, ISO string, or "DD/MM/YYYY HH:mm"
   const parseDate = (value: unknown) => {

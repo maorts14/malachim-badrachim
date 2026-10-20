@@ -46,7 +46,7 @@ class _AppStartupState extends State<_AppStartup> {
 }
 
 Future<void> _prepareApp() async {
-  const env = String.fromEnvironment('ENV', defaultValue: 'staging');
+  const env = String.fromEnvironment('ENV', defaultValue: 'local');
   await _loadEnvironment(env);
   // Android may initialize the default Firebase app from google-services
   // before Dart starts. Reusing it avoids a startup-only duplicate-app crash.
