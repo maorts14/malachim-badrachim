@@ -1,4 +1,3 @@
-import SidePanel from "../PTT/SidePanel/SidePanel";
 import "./Geography.css";
 import Map from "../Map/Map"
 import { useEffect, useState } from 'react';
@@ -29,7 +28,6 @@ export default function Geography() {
 
     return (
         <div className="panelBoardApp">
-            <SidePanel />
             <section>
               {error && <p role="alert">{error}</p>}
               <Map markers={markers}/>

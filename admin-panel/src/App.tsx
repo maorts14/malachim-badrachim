@@ -5,7 +5,6 @@ import Layout from "./components/Layout/Layout";
 import EventTable from "./components/EventTable/EventTable";
 import Situation from "./components/Situation/Situation";
 import EventsModal from "./components/EventsModal/EventModal";
-import Ptt from "./components/PTT/Ptt";
 import Geography from "./components/Geography/Geography";
 import Messages from "./components/Messages/Messages";
 import Login from "./components/Login/Login"
@@ -27,7 +26,6 @@ function App() {
           <Route path="/situation" element={<Situation />} />
           <Route path="/chat" element={<Messages />} />
           <Route path="/geography" element={<Geography />} />
-          <Route path="/ptt" element={<Ptt />} />
         </Route>
         <Route path="/*" element={user ? <NotFoundPage /> : <Navigate to="/" replace />} />
       </Routes>
