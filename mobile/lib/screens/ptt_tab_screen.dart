@@ -1,44 +1,41 @@
-import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:livekit_client/livekit_client.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
-import 'package:rescue_app/domain/services/permission_service.dart';
+import 'package:rescue_app/domain/services/ptt_session.dart';
 
 class PttTabScreen extends StatefulWidget {
-  const PttTabScreen({super.key});
+  const PttTabScreen({super.key, this.session, this.loadGroups});
+
+  final PttSession? session;
+  final Future<List<dynamic>> Function()? loadGroups;
 
   @override
   State<PttTabScreen> createState() => _PttTabScreenState();
 }
 
 class _PttTabScreenState extends State<PttTabScreen> {
-  final _api = RestApiService();
-  final _permissions = PermissionService();
+  late final PttSession _session;
   List<_PttGroup> _groups = const [];
   _PttGroup? _selectedGroup;
-  Room? _room;
   String? _error;
   bool _loading = true;
   bool _connecting = false;
   bool _transmitting = false;
 
-  bool get _connected => _room?.connectionState == ConnectionState.connected;
+  bool get _connected => _session.connected;
 
   @override
   void initState() {
     super.initState();
+    _session = widget.session ?? PttSession.live();
+    _session.addListener(_onRoomChanged);
     _loadGroups();
   }
 
   @override
   void dispose() {
-    final room = _room;
-    _room = null;
-    if (room != null) {
-      room.removeListener(_onRoomChanged);
-      room.disconnect();
-      room.dispose();
-    }
+    _session.removeListener(_onRoomChanged);
+    if (widget.session == null) _session.dispose();
     super.dispose();
   }
 
@@ -48,7 +45,7 @@ class _PttTabScreenState extends State<PttTabScreen> {
       _error = null;
     });
     try {
-      final groups = (await _api.listGroups())
+      final groups = (await (widget.loadGroups ?? RestApiService().listGroups)())
           .whereType<Map<String, dynamic>>()
           .map(_PttGroup.fromJson)
           .toList(growable: false);
@@ -84,20 +81,7 @@ class _PttTabScreenState extends State<PttTabScreen> {
       _error = null;
     });
     try {
-      final credentials = await _api.getPttRoomCredentials(group.id);
-      final room = Room();
-      room.addListener(_onRoomChanged);
-      await room.connect(
-          credentials['url'] as String, credentials['token'] as String);
-      await room.localParticipant?.setMicrophoneEnabled(false);
-      if (!mounted) {
-        room.removeListener(_onRoomChanged);
-        await room.disconnect();
-        await room.dispose();
-        return;
-      }
-      _room = room;
-      setState(() {});
+      await _session.join(group.id);
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'לא ניתן להתחבר לקשר כרגע. נסו שוב.');
@@ -110,13 +94,7 @@ class _PttTabScreenState extends State<PttTabScreen> {
   }
 
   Future<void> _leaveRoom() async {
-    final room = _room;
-    _room = null;
-    if (room != null) {
-      room.removeListener(_onRoomChanged);
-      await room.disconnect();
-      await room.dispose();
-    }
+    await _session.leave();
     if (mounted) {
       setState(() {
         _transmitting = false;
@@ -125,9 +103,7 @@ class _PttTabScreenState extends State<PttTabScreen> {
   }
 
   void _onRoomChanged() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _startTransmission() async {
@@ -135,14 +111,13 @@ class _PttTabScreenState extends State<PttTabScreen> {
       await _joinRoom();
       return;
     }
-    if (!await _permissions.requestMicrophone()) {
-      if (mounted) {
-        setState(() => _error = 'נדרשת הרשאת מיקרופון כדי לשדר.');
-      }
-      return;
-    }
     try {
-      await _room!.localParticipant?.setMicrophoneEnabled(true);
+      if (!await _session.startTransmission()) {
+        if (mounted) {
+          setState(() => _error = 'נדרשת הרשאת מיקרופון כדי לשדר.');
+        }
+        return;
+      }
       if (mounted) setState(() => _transmitting = true);
     } catch (_) {
       if (mounted) {
@@ -153,19 +128,14 @@ class _PttTabScreenState extends State<PttTabScreen> {
 
   Future<void> _stopTransmission() async {
     if (!_transmitting) return;
-    await _room?.localParticipant?.setMicrophoneEnabled(false);
+    await _session.stopTransmission();
     if (mounted) setState(() => _transmitting = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final group = _selectedGroup;
-    final speakers = _room?.activeSpeakers
-            .where((participant) =>
-                participant.identity != _room?.localParticipant?.identity)
-            .map((participant) => participant.name)
-            .join(', ') ??
-        '';
+    final speakers = _session.activeSpeakerNames.join(', ');
     return Directionality(
       textDirection: TextDirection.rtl,
       child: ColoredBox(

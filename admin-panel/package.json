@@ -8,6 +8,8 @@
     "dev:local": "vite --mode development",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:ptt:integration": "node --test tests/ptt/livekit.integration.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -21,6 +23,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@livekit/rtc-node": "^1.1.0",
+    "@testing-library/react": "^16.3.3",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
@@ -30,8 +34,11 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "jsdom": "^28.1.0",
+    "livekit-server-sdk": "^2.19.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^4.1.12"
   }
 }

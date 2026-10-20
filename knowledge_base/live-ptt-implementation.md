@@ -106,11 +106,25 @@ design.
 
 - Django `alerts` suite: 18 tests pass, including group access, token claims,
   and unavailable-configuration cases.
-- Flutter analysis passes with no issues.
+- Admin component test covers group selection, credential retrieval, room join,
+  mute-by-default, press-to-transmit, and release-to-mute.
+- Flutter unit tests cover the same mobile session contract with faked backend,
+  permission, and LiveKit dependencies; analysis passes with no issues.
+- The opt-in Node integration test connects two real clients to local LiveKit
+  and proves a non-silent synthetic microphone frame reaches the listener.
 - Admin production build succeeds.
 - The Postman collection parses as valid JSON.
 - Local Docker Compose starts the LiveKit development server and backend with
   the documented defaults.
+
+Run the checks from their component directories:
+
+```text
+backend:     docker compose -f docker-compose.local.yml exec -T backend python manage.py test alerts.tests
+admin:       npm test && npm run build
+admin media: npm run test:ptt:integration
+mobile:      flutter test && flutter analyze
+```
 
 ## Remaining operational verification
 
