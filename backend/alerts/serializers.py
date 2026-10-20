@@ -116,7 +116,6 @@ class GroupSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = serializers.SerializerMethodField()
-    voice_url = serializers.SerializerMethodField()
     alert = serializers.PrimaryKeyRelatedField(
         queryset=Alert.objects.all(), required=False, allow_null=True,
     )
@@ -133,8 +132,6 @@ class MessageSerializer(serializers.ModelSerializer):
             'group',
             'title',
             'text',
-            'voice_file',
-            'voice_url',
             'latitude',
             'longitude',
             'timestamp',
@@ -158,13 +155,6 @@ class MessageSerializer(serializers.ModelSerializer):
             "email": obj.sender.email,
             "role": profile.role if profile else None,
         }
-
-    @extend_schema_field({'type': 'string', 'format': 'uri', 'nullable': True})
-    def get_voice_url(self, obj):
-        if obj.voice_file:
-            return obj.voice_file.url
-        return None
-
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:

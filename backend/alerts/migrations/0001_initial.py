@@ -61,7 +61,6 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('title', models.CharField(max_length=255)),
                 ('text', models.TextField(blank=True)),
-                ('voice_file', models.FileField(blank=True, null=True, upload_to='voices/')),
                 ('latitude', models.FloatField(blank=True, null=True)),
                 ('longitude', models.FloatField(blank=True, null=True)),
                 ('timestamp', models.DateTimeField(auto_now_add=True)),

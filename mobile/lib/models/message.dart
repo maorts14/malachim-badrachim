@@ -5,8 +5,6 @@ class Message {
   final MessageSender sender;
   final String title;
   final String text;
-  final String? voiceFile;
-  final String? voiceUrl;
   final double? latitude;
   final double? longitude;
   final int? alertId;
@@ -18,8 +16,6 @@ class Message {
     required this.sender,
     required this.title,
     required this.text,
-    this.voiceFile,
-    this.voiceUrl,
     this.latitude,
     this.longitude,
     this.alertId,
@@ -38,8 +34,6 @@ class Message {
       ),
       title: '',
       text: '',
-      voiceFile: null,
-      voiceUrl: null,
       latitude: null,
       longitude: null,
       timestamp: DateTime.fromMillisecondsSinceEpoch(0),
@@ -52,8 +46,6 @@ class Message {
       sender: MessageSender.fromJson(json['sender'] as Map<String, dynamic>),
       title: json['title'] as String,
       text: json['text'] as String,
-      voiceFile: json['voice_file'] as String?,
-      voiceUrl: json['voice_url'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       alertId: json['alert'] as int?,
@@ -68,8 +60,6 @@ class Message {
       'sender': sender.toJson(),
       'title': title,
       'text': text,
-      'voice_file': voiceFile,
-      'voice_url': voiceUrl,
       'latitude': latitude,
       'longitude': longitude,
       'alert': alertId,

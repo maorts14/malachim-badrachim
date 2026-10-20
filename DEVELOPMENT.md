@@ -29,7 +29,7 @@ for local development and tests.
 ```
 
 This is the supported local-development entry point. It starts PostGIS, Redis,
-the Django API, and the Vite admin panel. It is deliberately separate from the
+LiveKit in development mode, the Django API, and the Vite admin panel. It is deliberately separate from the
 root `docker-compose.yml`, which is production-oriented and does not start a
 long-lived Vite development server by default.
 
@@ -48,6 +48,24 @@ data.
 - API: `http://localhost:8004/api/`
 - Admin panel: `http://localhost:5173/`
 - Postgres (host only): `127.0.0.1:15432`
+- Live PTT (host only): `ws://localhost:7880`
+
+## Live push-to-talk
+
+PTT is a LiveKit room per operational group. The backend issues a short-lived,
+group-scoped token; audio is streamed directly between clients through LiveKit
+and is never uploaded to Django or stored as a message.
+
+The local LiveKit service uses the development credentials already present in
+`.env.local.example`. For Android emulator PTT testing, set `LIVEKIT_URL` in
+the backend's `.env.local` to `ws://10.0.2.2:7880` and restart the backend.
+Switch it back to `ws://localhost:7880` when testing the browser admin panel.
+For a physical device, use the computer's reachable LAN address instead.
+
+Production needs a publicly reachable, TLS-enabled LiveKit deployment. Set
+`LIVEKIT_URL` to its `wss://` URL and set `LIVEKIT_API_KEY` and
+`LIVEKIT_API_SECRET` to that server's credentials. Do not use the local
+development credentials outside local development.
 
 ## Reset the local database after the initial-schema migration reset
 

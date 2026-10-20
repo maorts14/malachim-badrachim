@@ -50,7 +50,6 @@ export interface ApiMessage {
   group: number | null;
   title: string;
   text: string;
-  voice_url: string | null;
   latitude: number | null;
   longitude: number | null;
   timestamp: string;
@@ -60,6 +59,12 @@ export interface ApiGroup {
   id: number;
   name: string;
   members: number[];
+}
+
+export interface PttRoomCredentials {
+  url: string;
+  room: string;
+  token: string;
 }
 
 export interface RealtimeMessageEvent {
@@ -75,7 +80,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     credentials: 'include',
     headers: {
-      ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...(method === 'GET' || method === 'HEAD' || !csrfToken ? {} : { 'X-CSRFToken': decodeURIComponent(csrfToken) }),
       ...init.headers,
     },
@@ -107,20 +112,8 @@ export const rescueApi = {
     request<ApiGroup>('/group/', { method: 'POST', body: JSON.stringify(payload) }),
   updateGroup: (id: number, payload: Partial<Pick<ApiGroup, 'name' | 'members'>>) =>
     request<ApiGroup>(`/group/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  listGroupMessages: (groupId: number) => request<ApiMessage[]>(`/message/?group=${groupId}`),
-  createGroupMessage: (groupId: number, text: string) =>
-    request<ApiMessage>('/message/', {
-      method: 'POST',
-      body: JSON.stringify({ group: groupId, title: 'Dispatcher update', text }),
-    }),
-  createGroupVoiceMessage: (groupId: number, voice: Blob) => {
-    const form = new FormData();
-    form.append('group', String(groupId));
-    form.append('title', 'Voice transmission');
-    form.append('text', '');
-    form.append('voice_file', voice, 'transmission.webm');
-    return request<ApiMessage>('/message/', { method: 'POST', body: form });
-  },
+  getPttRoomCredentials: (groupId: number) =>
+    request<PttRoomCredentials>(`/group/${groupId}/ptt-token/`, { method: 'POST' }),
 };
 
 /**

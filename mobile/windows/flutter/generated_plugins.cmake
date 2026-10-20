@@ -4,12 +4,13 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
-  audioplayers_windows
+  connectivity_plus
   firebase_core
   flutter_secure_storage_windows
+  flutter_webrtc
   geolocator_windows
+  livekit_client
   permission_handler_windows
-  record_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

@@ -6,7 +6,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rescue_app/constants/app_colors.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
-import 'package:rescue_app/domain/services/audio_service.dart';
 import 'package:rescue_app/domain/services/auth_service.dart';
 import 'package:rescue_app/domain/services/deeplink_service.dart';
 import 'package:rescue_app/domain/services/device_service.dart';
@@ -34,7 +33,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
   late final NotificationService _notificationService;
   late final PermissionService _permissionService;
   late final LocationService _locationService;
-  late final AudioService _audioService;
   late final DeepLinkService _deepLinkService;
   late final DeviceService _deviceService;
   late final MessageRepository _messageRepository;
@@ -52,7 +50,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
     _apiClient = RestApiService();
     _permissionService = PermissionService();
     _locationService = LocationService();
-    _audioService = AudioService();
     _deviceService = DeviceService();
     _messageRepository = MessageRepository(apiClient: _apiClient);
     _locationRepository = LocationRepository();
@@ -70,7 +67,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
     unawaited(_deepLinkSubscription?.cancel());
     _authService.session.removeListener(_onSessionChanged);
     unawaited(_messageRepository.dispose());
-    unawaited(_audioService.dispose());
     unawaited(_deepLinkService.dispose());
     unawaited(_notificationService.dispose());
     _apiClient.dispose();
@@ -124,7 +120,6 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
         RepositoryProvider.value(value: _authService),
         RepositoryProvider.value(value: _permissionService),
         RepositoryProvider.value(value: _locationService),
-        RepositoryProvider.value(value: _audioService),
         RepositoryProvider.value(value: _messageRepository),
         RepositoryProvider.value(value: _locationRepository),
         RepositoryProvider.value(value: _groupRepository),

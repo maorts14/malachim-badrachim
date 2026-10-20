@@ -37,6 +37,8 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to center the rescue map and show live position updates.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We use your microphone only while you hold the push-to-talk control for live group communication.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

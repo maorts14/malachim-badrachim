@@ -27,6 +27,9 @@ services:
     environment:
       FIREBASE_SERVICE_ACCOUNT: /run/secrets/firebase-service-account.json
       REDIS_URL: redis://redis:6379/0
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
     volumes:
       - ./backend:/app
       - ./backend/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
@@ -60,6 +63,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
+
+  livekit:
+    image: livekit/livekit-server:v1.9.10
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
 
   admin-panel:
     image: node:lts-alpine

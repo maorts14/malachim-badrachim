@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Rescue Alert System — Production",
-    "description": "Production API reference for the Rescue Alert System.\n\n## Authentication\nThe API uses Django REST Framework SimpleJWT. Protected endpoints require the access token returned by this API:\n```\nAuthorization: Bearer <access_token>\n```\n\n**Quick start:**\n1. Set `user_email` and `user_password` in collection variables.\n2. If needed, run **Authentication → Register**. This creates a Django user and saves the returned token pair.\n3. Run **Authentication → Login (Obtain Tokens)**. It automatically saves `access` and `refresh` into `access_token` and `refresh_token`.\n4. Run **Authentication → Verify Current Token** before testing protected endpoints.\n\nUse **Authentication → Refresh Access Token** when an access token expires. Firebase ID tokens are not accepted by this API.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `base_url` | Production API base URL |\n| `user_email` | Django username/email used to register or sign in |\n| `user_password` | Django account password |\n| `access_token` | JWT access token — auto-set by Register, Login, and Refresh |\n| `refresh_token` | JWT refresh token — auto-set by Register and Login |\n| `alert_id` | Alert ID for detail/update/delete requests |\n| `user_id` | UserProfile ID for detail/update/delete requests |\n| `group_id` | Group ID for detail/update/delete requests |\n| `message_id` | Message ID for detail/update/delete requests |\n| `notification_id` | Notification token record ID |\n\n## Notes\n- `POST /api/auth/register/` creates the Django account; it is not created implicitly by a Firebase request.\n- `sender` on messages and `user` on notifications are set automatically from the authenticated Django user; do not include them in request bodies.\n- `voice_file` uploads use `multipart/form-data`; do not set `Content-Type` manually — Postman adds the boundary automatically.",
+    "description": "Production API reference for the Rescue Alert System.\n\n## Authentication\nThe API uses Django REST Framework SimpleJWT. Protected endpoints require the access token returned by this API:\n```\nAuthorization: Bearer <access_token>\n```\n\n**Quick start:**\n1. Set `user_email` and `user_password` in collection variables.\n2. If needed, run **Authentication → Register**. This creates a Django user and saves the returned token pair.\n3. Run **Authentication → Login (Obtain Tokens)**. It automatically saves `access` and `refresh` into `access_token` and `refresh_token`.\n4. Run **Authentication → Verify Current Token** before testing protected endpoints.\n\nUse **Authentication → Refresh Access Token** when an access token expires. Firebase ID tokens are not accepted by this API.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `base_url` | Production API base URL |\n| `user_email` | Django username/email used to register or sign in |\n| `user_password` | Django account password |\n| `access_token` | JWT access token — auto-set by Register, Login, and Refresh |\n| `refresh_token` | JWT refresh token — auto-set by Register and Login |\n| `alert_id` | Alert ID for detail/update/delete requests |\n| `user_id` | UserProfile ID for detail/update/delete requests |\n| `group_id` | Group ID for detail/update/delete requests |\n| `message_id` | Message ID for detail/update/delete requests |\n| `notification_id` | Notification token record ID |\n\n## Notes\n- `POST /api/auth/register/` creates the Django account; it is not created implicitly by a Firebase request.\n- `sender` on messages and `user` on notifications are set automatically from the authenticated Django user; do not include them in request bodies.\n- Live PTT uses `POST /api/group/{group_id}/ptt-token/`. It returns a 15-minute room token; audio is never uploaded, stored, or replayed by this API.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -856,6 +856,32 @@
           ]
         },
         {
+          "name": "Get Live PTT Room Token",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/group/{{group_id}}/ptt-token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "group", "{{group_id}}", "ptt-token", ""]
+            },
+            "description": "Return a 15-minute LiveKit token scoped to this group room. Group members and dispatchers may call this endpoint. The response is consumed by a LiveKit client and does not represent stored audio."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"url\": \"wss://ptt.example.com\",\n  \"room\": \"group-1\",\n  \"token\": \"<livekit-jwt>\"\n}"
+            },
+            {
+              "name": "503 PTT unavailable",
+              "status": "Service Unavailable",
+              "code": 503,
+              "body": "{\n  \"detail\": \"Realtime PTT is not configured.\"\n}"
+            }
+          ]
+        },
+        {
           "name": "Add User to Group",
           "request": {
             "method": "POST",
@@ -925,7 +951,7 @@
     },
     {
       "name": "Messages",
-      "description": "Send and retrieve field messages. Supports text-only or text + voice file attachment.\n\nUse `alert` to make an incident-scoped operational thread, or `group` for a group thread. A volunteer can only read or post in alerts assigned to them and groups they belong to; dispatchers can coordinate across contexts.\n\n`sender` is set automatically from the authenticated token — do not include it in request bodies.\n\nVoice files are served from `/media/voices/` and accessible via the `voice_url` field in responses.",
+      "description": "Send and retrieve text field messages. Use `alert` to make an incident-scoped operational thread, or `group` for a group thread. A volunteer can only read or post in alerts assigned to them and groups they belong to; dispatchers can coordinate across contexts.\n\n`sender` is set automatically from the authenticated token — do not include it in request bodies. Live audio belongs to the group PTT room and is not represented as a message.",
       "item": [
         {
           "name": "List Messages",
@@ -943,7 +969,7 @@
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "[\n  {\n    \"id\": 1,\n    \"sender\": {\n      \"id\": 1,\n      \"username\": \"<firebase_uid>\",\n      \"email\": \"jdoe@example.com\",\n      \"role\": \"rescuer\"\n    },\n    \"title\": \"Evacuation Update\",\n    \"text\": \"Sector 3 is clear.\",\n    \"voice_file\": null,\n    \"voice_url\": null,\n    \"latitude\": 40.7128,\n    \"longitude\": -74.006,\n    \"timestamp\": \"2024-01-15T10:35:00Z\"\n  }\n]"
+              "body": "[\n  {\n    \"id\": 1,\n    \"sender\": {\n      \"id\": 1,\n      \"username\": \"<firebase_uid>\",\n      \"email\": \"jdoe@example.com\",\n      \"role\": \"rescuer\"\n    },\n    \"title\": \"Evacuation Update\",\n    \"text\": \"Sector 3 is clear.\",\n    \"latitude\": 40.7128,\n    \"longitude\": -74.006,\n    \"timestamp\": \"2024-01-15T10:35:00Z\"\n  }\n]"
             }
           ]
         },
@@ -982,37 +1008,7 @@
               "name": "201 Created",
               "status": "Created",
               "code": 201,
-              "body": "{\n  \"id\": 1,\n  \"sender\": {\n    \"id\": 1,\n    \"username\": \"<firebase_uid>\",\n    \"email\": \"jdoe@example.com\",\n    \"role\": \"rescuer\"\n  },\n  \"title\": \"Evacuation Update\",\n  \"text\": \"Sector 3 is clear. All units proceed to sector 4.\",\n  \"voice_file\": null,\n  \"voice_url\": null,\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006,\n  \"timestamp\": \"2024-01-15T10:35:00Z\"\n}"
-            }
-          ]
-        },
-        {
-          "name": "Create Message (With Voice)",
-          "request": {
-            "method": "POST",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "title", "value": "Voice Update", "type": "text" },
-                { "key": "text", "value": "See attached audio.", "type": "text", "description": "Optional" },
-                { "key": "latitude", "value": "40.7128", "type": "text", "description": "Optional" },
-                { "key": "longitude", "value": "-74.006", "type": "text", "description": "Optional" },
-                { "key": "voice_file", "type": "file", "src": "", "description": "Audio file (mp3, wav, m4a, etc.)" }
-              ]
-            },
-            "url": {
-              "raw": "{{base_url}}/api/message/",
-              "host": ["{{base_url}}"],
-              "path": ["api", "message", ""]
-            },
-            "description": "Create a message with a voice file attachment. Use `multipart/form-data` — **do not set `Content-Type` manually**, Postman adds the boundary automatically. The response includes `voice_url` pointing to the uploaded file under `/media/voices/`."
-          },
-          "response": [
-            {
-              "name": "201 Created",
-              "status": "Created",
-              "code": 201,
-              "body": "{\n  \"id\": 2,\n  \"sender\": {\n    \"id\": 1,\n    \"username\": \"<firebase_uid>\",\n    \"email\": \"jdoe@example.com\",\n    \"role\": \"rescuer\"\n  },\n  \"title\": \"Voice Update\",\n  \"text\": \"See attached audio.\",\n  \"voice_file\": \"voices/update.mp3\",\n  \"voice_url\": \"https://rescue-alert-system-malachim-badrachim.navonsimon.com/media/voices/update.mp3\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006,\n  \"timestamp\": \"2024-01-15T10:36:00Z\"\n}"
+              "body": "{\n  \"id\": 1,\n  \"sender\": {\n    \"id\": 1,\n    \"username\": \"<firebase_uid>\",\n    \"email\": \"jdoe@example.com\",\n    \"role\": \"rescuer\"\n  },\n  \"title\": \"Evacuation Update\",\n  \"text\": \"Sector 3 is clear. All units proceed to sector 4.\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006,\n  \"timestamp\": \"2024-01-15T10:35:00Z\"\n}"
             }
           ]
         },

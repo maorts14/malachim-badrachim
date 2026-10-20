@@ -234,6 +234,12 @@ SIMPLE_JWT = {
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@rescue-alert.local')
 PASSWORD_RESET_URL = config('PASSWORD_RESET_URL', default='')
 
+# LiveKit is the realtime PTT transport. Clients obtain short-lived, room-scoped
+# tokens from Django; the API secret is never exposed to a browser or mobile app.
+LIVEKIT_URL = config('LIVEKIT_URL', default='')
+LIVEKIT_API_KEY = config('LIVEKIT_API_KEY', default='')
+LIVEKIT_API_SECRET = config('LIVEKIT_API_SECRET', default='')
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Rescue Alert System API',
     'DESCRIPTION': (

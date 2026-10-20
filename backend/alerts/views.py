@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import login as django_login, logout as django_logout
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
@@ -21,6 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from livekit import api as livekit_api
 
 from .models import (
     Alert,
@@ -238,6 +241,49 @@ class GroupViewSet(viewsets.ModelViewSet):
         if is_dispatcher(self.request.user):
             return Group.objects.all()
         return Group.objects.filter(members=self.request.user)
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(
+                description='A short-lived LiveKit token scoped to this group room and the authenticated participant.',
+            ),
+            404: OpenApiResponse(description='The group is unavailable to the authenticated user.'),
+            503: OpenApiResponse(description='Realtime PTT is not configured on this deployment.'),
+        },
+        description=(
+            'Joins the live PTT room for this group. The returned token is restricted to microphone publishing '
+            'and subscribing in this one room. It does not grant access to recordings or other group rooms.'
+        ),
+    )
+    @action(detail=True, methods=['post'], url_path='ptt-token', url_name='ptt-token')
+    def ptt_token(self, request, pk=None):
+        group = self.get_object()
+        if not is_dispatcher(request.user) and not group.members.filter(id=request.user.id).exists():
+            raise PermissionDenied('You are not a member of this group.')
+        if not all((settings.LIVEKIT_URL, settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)):
+            return Response(
+                {'detail': 'Realtime PTT is not configured.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        room_name = f'group-{group.id}'
+        token = (
+            livekit_api.AccessToken(settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)
+            .with_identity(f'user-{request.user.id}')
+            .with_name(request.user.get_full_name() or request.user.username)
+            .with_ttl(timedelta(minutes=15))
+            .with_grants(livekit_api.VideoGrants(
+                room_join=True,
+                room=room_name,
+                can_publish=True,
+                can_subscribe=True,
+                can_publish_data=False,
+                can_publish_sources=['microphone'],
+            ))
+            .to_jwt()
+        )
+        return Response({'url': settings.LIVEKIT_URL, 'room': room_name, 'token': token})
 
     @action(detail=True, methods=['post'])
     def add_user(self, request, pk=None):

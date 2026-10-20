@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:rescue_app/constants/app_env.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/models/message.dart';
@@ -128,12 +127,10 @@ class MessageRepository {
   Future<void> postMessage({
     required String title,
     required String text,
-    Uint8List? voicePayload,
   }) async {
     await _apiClient.postMessage(
       title: title,
       text: text,
-      voicePayload: voicePayload,
     );
     await refreshMessages();
   }

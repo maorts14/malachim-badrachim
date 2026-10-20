@@ -47,7 +47,6 @@ class Message(models.Model):
     )
     title = models.CharField(max_length=255)
     text = models.TextField(blank=True)
-    voice_file = models.FileField(upload_to='voices/', null=True, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)

@@ -3,10 +3,10 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  audioplayers_linux
   flutter_secure_storage_linux
+  flutter_webrtc
   gtk
-  record_linux
+  livekit_client
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

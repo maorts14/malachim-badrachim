@@ -285,22 +285,16 @@ class RestApiService {
   Future<List<Message>> postMessage({
     required String title,
     required String text,
-    Uint8List? voicePayload,
   }) async {
     try {
       if (!await checkDioHeaders()) {
         return const [];
       }
 
-      final data = FormData.fromMap({
+      final data = <String, dynamic>{
         'title': title,
         'text': text,
-        if (voicePayload != null)
-          'voice_file': MultipartFile.fromBytes(
-            voicePayload,
-            filename: 'voice_note.m4a',
-          ),
-      });
+      };
 
       final response = await _dio.post('/api/message/', data: data);
       if (response.data == null || response.data is! Map<String, dynamic>) {
@@ -564,6 +558,16 @@ class RestApiService {
     return _asMap(response.data);
   }
 
+  Future<Map<String, dynamic>> getPttRoomCredentials(int groupId) async {
+    final response = await _safePost('/api/group/$groupId/ptt-token/');
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      throw StateError(_apiErrorMessage(response.data));
+    }
+    return _asMap(response.data);
+  }
+
   Future<Map<String, dynamic>> updateGroup({
     required int id,
     required String name,
@@ -632,27 +636,20 @@ class RestApiService {
   Future<Map<String, dynamic>> createMessage({
     required String title,
     required String text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
     int? alertId,
     int? groupId,
   }) async {
-    final payload = await _buildMessagePayload(
+    final payload = _buildMessagePayload(
       title: title,
       text: text,
-      voiceFile: voiceFile,
       latitude: latitude,
       longitude: longitude,
     );
 
-    if (payload is Map<String, dynamic>) {
-      if (alertId != null) payload['alert'] = alertId;
-      if (groupId != null) payload['group'] = groupId;
-    } else if (payload is FormData) {
-      if (alertId != null) payload.fields.add(MapEntry('alert', '$alertId'));
-      if (groupId != null) payload.fields.add(MapEntry('group', '$groupId'));
-    }
+    if (alertId != null) payload['alert'] = alertId;
+    if (groupId != null) payload['group'] = groupId;
 
     final response = await _safePost('/api/message/', data: payload);
     if (response.statusCode == null ||
@@ -672,14 +669,12 @@ class RestApiService {
     required int id,
     required String title,
     required String text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
   }) async {
-    final payload = await _buildMessagePayload(
+    final payload = _buildMessagePayload(
       title: title,
       text: text,
-      voiceFile: voiceFile,
       latitude: latitude,
       longitude: longitude,
     );
@@ -692,14 +687,12 @@ class RestApiService {
     required int id,
     String? title,
     String? text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
   }) async {
-    final payload = await _buildMessagePayload(
+    final payload = _buildMessagePayload(
       title: title,
       text: text,
-      voiceFile: voiceFile,
       latitude: latitude,
       longitude: longitude,
       skipNulls: true,
@@ -898,53 +891,24 @@ class RestApiService {
     return _asList(response.data);
   }
 
-  Future<dynamic> _buildMessagePayload({
+  Map<String, dynamic> _buildMessagePayload({
     String? title,
     String? text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
     bool skipNulls = false,
-  }) async {
-    final hasFile = voiceFile != null;
-
-    if (!hasFile) {
-      final data = <String, dynamic>{
-        'title': title,
-        'text': text,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
-      if (skipNulls) {
-        data.removeWhere((key, value) => value == null);
-      }
-      return data;
-    }
-
-    MultipartFile filePart;
-    if (voiceFile is MultipartFile) {
-      filePart = voiceFile;
-    } else if (voiceFile is String) {
-      filePart = await MultipartFile.fromFile(voiceFile);
-    } else {
-      throw ArgumentError(
-        'voiceFile must be either a file path String or MultipartFile.',
-      );
-    }
-
-    final formMap = <String, dynamic>{
+  }) {
+    final data = <String, dynamic>{
       'title': title,
       'text': text,
-      'voice_file': filePart,
       'latitude': latitude,
       'longitude': longitude,
     };
 
     if (skipNulls) {
-      formMap.removeWhere((key, value) => value == null);
+      data.removeWhere((key, value) => value == null);
     }
-
-    return FormData.fromMap(formMap);
+    return data;
   }
 
   Future<Response<dynamic>> _safeGet(

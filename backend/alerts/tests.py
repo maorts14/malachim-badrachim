@@ -1,5 +1,7 @@
 import re
 
+import jwt
+
 from django.contrib.auth.models import User
 from django.contrib.gis.geos import Point
 from django.contrib.sessions.backends.db import SessionStore
@@ -243,6 +245,53 @@ class AlertDispatchContractTests(APITestCase):
         )
         self.assertEqual(volunteer_profile['id'], self.volunteer.userprofile.id)
         self.assertEqual(volunteer_profile['user_id'], self.volunteer.id)
+
+
+@override_settings(
+    LIVEKIT_URL='ws://livekit.test:7880',
+    LIVEKIT_API_KEY='test-key',
+    LIVEKIT_API_SECRET='test-secret',
+)
+class PttRoomTokenTests(APITestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(username='ptt-manager')
+        self.manager.userprofile.role = UserProfile.Role.MANAGER
+        self.manager.userprofile.save(update_fields=['role'])
+        self.member = User.objects.create_user(username='ptt-member')
+        self.outsider = User.objects.create_user(username='ptt-outsider')
+        self.group = Group.objects.create(name='PTT responders')
+        self.group.members.add(self.member)
+
+    def test_member_receives_a_room_scoped_livekit_token(self):
+        self.client.force_authenticate(self.member)
+
+        response = self.client.post(f'/api/group/{self.group.id}/ptt-token/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['url'], 'ws://livekit.test:7880')
+        self.assertEqual(response.data['room'], f'group-{self.group.id}')
+        self.assertIsInstance(response.data['token'], str)
+        self.assertTrue(response.data['token'])
+        claims = jwt.decode(response.data['token'], options={'verify_signature': False})
+        self.assertEqual(claims['sub'], f'user-{self.member.id}')
+        self.assertEqual(claims['video']['room'], f'group-{self.group.id}')
+        self.assertTrue(claims['video']['roomJoin'])
+        self.assertEqual(claims['video']['canPublishSources'], ['microphone'])
+
+    def test_non_member_cannot_get_a_room_token(self):
+        self.client.force_authenticate(self.outsider)
+
+        response = self.client.post(f'/api/group/{self.group.id}/ptt-token/')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @override_settings(LIVEKIT_URL='', LIVEKIT_API_KEY='', LIVEKIT_API_SECRET='')
+    def test_returns_service_unavailable_when_realtime_is_not_configured(self):
+        self.client.force_authenticate(self.manager)
+
+        response = self.client.post(f'/api/group/{self.group.id}/ptt-token/')
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 class RealtimeMessageContractTests(TransactionTestCase):

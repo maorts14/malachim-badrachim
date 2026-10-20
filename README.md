@@ -65,6 +65,7 @@ When an incident occurs, the system identifies nearby available volunteers and a
   <li><strong>Admin Panel:</strong> React 19 + TypeScript + Vite (web dispatcher dashboard)</li>
   <li><strong>Mobile App:</strong> Flutter</li>
   <li><strong>Notifications:</strong> Firebase Cloud Messaging (FCM)</li>
+  <li><strong>Live push-to-talk:</strong> LiveKit (self-hosted)</li>
   <li><strong>Infrastructure:</strong> Docker + Docker Compose</li>
 </ul>
 
@@ -175,6 +176,15 @@ nginx serves the built panel in production.</p>
 
 <p>
 The stack runs on <code>debian01</code> under <code>/srv/rescue-alert-system</code>. Host nginx (port 80, TLS terminated at Cloudflare) proxies <code>/api/</code> and <code>/admin/</code> to <code>127.0.0.1:8004</code> and serves the built admin panel from <code>admin-panel/dist</code>.
+</p>
+
+<p>
+Live push-to-talk is a separate self-hosted LiveKit service. Configure its public
+<code>wss://</code> URL and API credentials as <code>LIVEKIT_URL</code>,
+<code>LIVEKIT_API_KEY</code>, and <code>LIVEKIT_API_SECRET</code> in the backend
+environment. Django only issues 15-minute, group-scoped room tokens; it does
+not store or replay PTT audio. See <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>
+for local development.
 </p>
 
 <pre>
