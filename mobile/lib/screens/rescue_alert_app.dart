@@ -19,6 +19,7 @@ import 'package:rescue_app/presentation/router/app_router.dart';
 import 'package:rescue_app/repositories/group_repository.dart';
 import 'package:rescue_app/repositories/location_repository.dart';
 import 'package:rescue_app/repositories/message_repository.dart';
+import 'package:rescue_app/widgets/auth_session_gate.dart';
 
 class RescueAlertApp extends StatefulWidget {
   const RescueAlertApp({super.key});
@@ -39,12 +40,14 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
   late final MessageRepository _messageRepository;
   late final LocationRepository _locationRepository;
   late final GroupRepository _groupRepository;
+  late final Future<void> _sessionRestoration;
   StreamSubscription<String?>? _deepLinkSubscription;
 
   @override
   void initState() {
     super.initState();
     _authService = AuthService();
+    _sessionRestoration = _authService.restoreSession();
     _deepLinkService = DeepLinkService();
     _apiClient = RestApiService();
     _permissionService = PermissionService();
@@ -76,7 +79,7 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
 
   Future<void> _bootstrap() async {
     try {
-      await _authService.restoreSession();
+      await _sessionRestoration;
       await _notificationService.initialize();
     } catch (e) {
       debugPrint('Optional startup service setup skipped: $e');
@@ -126,70 +129,86 @@ class _RescueAlertAppState extends State<RescueAlertApp> {
         RepositoryProvider.value(value: _locationRepository),
         RepositoryProvider.value(value: _groupRepository),
       ],
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider(create: (_) => LocaleCubit()),
-        ],
-        child: BlocBuilder<LocaleCubit, LocaleState>(builder: (context, state) {
-          return ProviderScope(
-            child: MaterialApp.router(
-              debugShowCheckedModeBanner: false,
-              title: 'אפליקציית הצלה',
-              theme: ThemeData(
-                useMaterial3: true,
-                // colorScheme: ColorScheme.fromSeed(
-                //   seedColor: Colors.blue,
-                // ).copyWith(
-                //   surface: Colors.grey[100], // 👈 THIS controls background
-                // ),
-                scaffoldBackgroundColor: AppColors.screenBackground,
+      child: AuthSessionGate(
+        sessionRestoration: _sessionRestoration,
+        isAuthenticated: () => _authService.isAuthenticated,
+        loadingChild: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: AppColors.screenBackground,
+            body: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+        unauthenticatedChild: _buildAppShell(),
+        authenticatedChild: _buildAppShell(),
+      ),
+    );
+  }
 
-                appBarTheme: AppBarTheme(
-                  backgroundColor:
-                      AppColors.appBarBackground, // Sets the background color
-                  foregroundColor: AppColors
-                      .appBarForeground, // Sets the text and icon color
-                ),
-                filledButtonTheme: FilledButtonThemeData(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.buttonBackground,
-                    foregroundColor: AppColors.buttonForeground,
-                  ),
-                ),
-                elevatedButtonTheme: ElevatedButtonThemeData(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.buttonBackground,
-                    foregroundColor: AppColors.buttonForeground,
-                  ),
-                ),
-                outlinedButtonTheme: OutlinedButtonThemeData(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.buttonBackground,
-                    side: BorderSide(color: AppColors.buttonBackground),
-                  ),
-                ),
-                textButtonTheme: TextButtonThemeData(
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                  ),
+  Widget _buildAppShell() {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => LocaleCubit()),
+      ],
+      child: BlocBuilder<LocaleCubit, LocaleState>(builder: (context, state) {
+        return ProviderScope(
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            title: 'אפליקציית הצלה',
+            theme: ThemeData(
+              useMaterial3: true,
+              // colorScheme: ColorScheme.fromSeed(
+              //   seedColor: Colors.blue,
+              // ).copyWith(
+              //   surface: Colors.grey[100], // 👈 THIS controls background
+              // ),
+              scaffoldBackgroundColor: AppColors.screenBackground,
+
+              appBarTheme: AppBarTheme(
+                backgroundColor:
+                    AppColors.appBarBackground, // Sets the background color
+                foregroundColor:
+                    AppColors.appBarForeground, // Sets the text and icon color
+              ),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.buttonBackground,
+                  foregroundColor: AppColors.buttonForeground,
                 ),
               ),
-              routerConfig: appRouter, //_appRouter.router
-              locale: const Locale('he'),
-              supportedLocales: const [
-                Locale('he', ''),
-                Locale('en', ''),
-              ],
-              localizationsDelegates: const [
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-                VTranslation.delegate,
-              ],
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.buttonBackground,
+                  foregroundColor: AppColors.buttonForeground,
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.buttonBackground,
+                  side: BorderSide(color: AppColors.buttonBackground),
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                ),
+              ),
             ),
-          );
-        }),
-      ),
+            routerConfig: appRouter, //_appRouter.router
+            locale: const Locale('he'),
+            supportedLocales: const [
+              Locale('he', ''),
+              Locale('en', ''),
+            ],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              VTranslation.delegate,
+            ],
+          ),
+        );
+      }),
     );
   }
 }

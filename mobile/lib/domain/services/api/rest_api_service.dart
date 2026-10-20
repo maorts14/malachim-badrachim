@@ -982,7 +982,9 @@ class RestApiService {
     Map<String, dynamic>? queryParameters,
   }) async {
     try {
-      if (!await checkDioHeaders()) {
+      final isJwtTokenRoute =
+          path == '/api/token/' || path == '/api/token/refresh/';
+      if (!isJwtTokenRoute && !await checkDioHeaders()) {
         return _toErrorResponse(
           path: path,
           error: StateError('Missing authorization headers'),
