@@ -10,8 +10,8 @@ This document distinguishes operational data from presentation defaults in the c
 | Alert acceptance/decline/arrival | Django assignment/response endpoints | Real writes to the local development database |
 | Contacts | API user profiles, excluding the currently signed-in account | Real development data; an empty list is expected while no other development profiles exist |
 | Profile/settings | Current-profile API | Real read/write data in the local development database |
-| Groups and PTT recordings | Group/message APIs plus device microphone recorder | Real implementation and local development data; the account has no groups unless an administrator adds it |
-| Text/voice messages | API plus WebSocket/polling client transport | Real implementation; authenticated device-to-device end-to-end verification remains outstanding |
+| Groups and live PTT | Group API plus a LiveKit room per group | Real implementation. Audio is transmitted live and is never stored as a Django message or media file; the account has no groups unless a manager adds it |
+| Text messages | API plus WebSocket/polling client transport | Real implementation; authenticated device-to-device end-to-end verification remains outstanding |
 | User locations/incident markers | Profile-location and alert APIs | Real local API data when coordinates are available |
 | Map imagery | Mapbox | Live third-party map tiles; the Tel Aviv camera is a presentation fallback when no saved camera exists |
 | Push notifications | Firebase FCM registration plus backend notification sender | Real implementation; production delivery has not been verified |
