@@ -10,4 +10,3 @@
 .ptt__transmit { width: 100%; margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 8px; }.ptt__transmit--recording { background: #b72d2d !important; }.ptt__icon-button { background: transparent !important; color: #0e7a54 !important; }.ptt__manage { display: flex; flex-direction: column; gap: 9px; }.ptt__manage label { display: flex; align-items: center; gap: 8px; }.ptt__manage hr { width: 100%; border: 0; border-top: 1px solid #dbe1ea; }.ptt__state, .ptt__error { padding: 12px; }.ptt__error { background: #feeceb; color: #9c1c1c; border-radius: 8px; }
 .ptt__empty { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }.ptt__empty button { white-space: nowrap; }
 @media (max-width: 900px) { .ptt__layout { grid-template-columns: 1fr; }.ptt__groups { flex-direction: row; flex-wrap: wrap; }.ptt__group { min-width: 140px; } }
-
