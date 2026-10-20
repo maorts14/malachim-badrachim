@@ -1,25 +1,19 @@
 import "./Geography.css";
 import Map from "../Map/Map"
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { rescueApi, type ApiAlert, type ApiUser } from '../../services/api';
+import ResourceState from '../ResourceState/ResourceState';
+import { useDashboardResource } from '../../hooks/useDashboardResource';
 
 
 export default function Geography() {
-    const [alerts, setAlerts] = useState<ApiAlert[]>([]);
-    const [users, setUsers] = useState<ApiUser[]>([]);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        let active = true;
-        void Promise.all([rescueApi.listAlerts(), rescueApi.listUsers()])
-            .then(([nextAlerts, nextUsers]) => {
-                if (active) { setAlerts(nextAlerts); setUsers(nextUsers); }
-            })
-            .catch((loadError: unknown) => {
-                if (active) setError(loadError instanceof Error ? loadError.message : 'טעינת המפה נכשלה.');
-            });
-        return () => { active = false; };
+    const loadMap = useCallback(async (): Promise<{ alerts: ApiAlert[]; users: ApiUser[] }> => {
+        const [alerts, users] = await Promise.all([rescueApi.listAlerts(), rescueApi.listUsers()]);
+        return { alerts, users };
     }, []);
+    const mapResource = useDashboardResource(loadMap);
+    const alerts = mapResource.data?.alerts ?? [];
+    const users = mapResource.data?.users ?? [];
 
     const markers = [
         ...alerts.map((alert) => ({ id: `alert-${alert.id}`, latitude: alert.latitude, longitude: alert.longitude, label: alert.title, kind: 'alert' as const })),
@@ -29,7 +23,8 @@ export default function Geography() {
     return (
         <div className="panelBoardApp">
             <section>
-              {error && <p role="alert">{error}</p>}
+              <button type="button" onClick={() => void mapResource.refresh()} disabled={mapResource.loading || mapResource.refreshing}>רענן מפה</button>
+              <ResourceState error={mapResource.error} loading={mapResource.loading} refreshing={mapResource.refreshing} empty={markers.length === 0} onRetry={() => void mapResource.refresh()} loadingLabel="טוען מפה…" emptyLabel="אין סמנים להצגה במפה." />
               <Map markers={markers}/>
             </section>
 

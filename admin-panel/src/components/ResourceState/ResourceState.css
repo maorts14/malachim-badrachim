@@ -1,0 +1,5 @@
+.resource-state { margin: 12px 0; padding: 12px; color: #526176; text-align: center; }
+.resource-state--refreshing { padding-block: 6px; font-size: 13px; }
+.resource-state--error, .resource-state--forbidden { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #9c1c1c; background: #feeceb; border-radius: 8px; text-align: right; }
+.resource-state--forbidden { color: #7a4d00; background: #fff4d6; }
+.resource-state button { border: 1px solid currentColor; border-radius: 6px; padding: 6px 10px; color: inherit; background: transparent; cursor: pointer; white-space: nowrap; }

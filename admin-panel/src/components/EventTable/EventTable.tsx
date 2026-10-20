@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import './EventTable.css';
 import { type ApiAlert, type ApiUser, rescueApi } from '../../services/api';
+import ResourceState from '../ResourceState/ResourceState';
+import { useDashboardResource } from '../../hooks/useDashboardResource';
 
 const statusLabel: Record<ApiAlert['status'], string> = {
   OPEN: 'פתוח', DISPATCHED: 'שובץ', ACCEPTED: 'התקבל',
@@ -9,33 +11,22 @@ const statusLabel: Record<ApiAlert['status'], string> = {
 const priorityLabel: Record<ApiAlert['priority'], string> = {
   LOW: 'נמוך', MEDIUM: 'בינוני', HIGH: 'גבוה', CRITICAL: 'דחוף',
 };
+const emptyAlerts: ApiAlert[] = [];
 
 export default function EventTable() {
-  const [alerts, setAlerts] = useState<ApiAlert[]>([]);
+  const loadAlerts = useCallback(() => rescueApi.listAlerts(), []);
+  const alertsResource = useDashboardResource(loadAlerts);
+  const alerts = alertsResource.data ?? emptyAlerts;
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState<'ALL' | ApiAlert['status']>('ALL');
   const [priority, setPriority] = useState<'ALL' | ApiAlert['priority']>('ALL');
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [dispatchTarget, setDispatchTarget] = useState<ApiAlert | null>(null);
   const [responders, setResponders] = useState<ApiUser[]>([]);
   const [responderSearch, setResponderSearch] = useState('');
   const [selectedResponderIds, setSelectedResponderIds] = useState<number[]>([]);
   const [loadingResponders, setLoadingResponders] = useState(false);
   const [submittingDispatch, setSubmittingDispatch] = useState(false);
-
-  const loadAlerts = async () => {
-    try { setError(null); setAlerts(await rescueApi.listAlerts()); }
-    catch (loadError) { setError(loadError instanceof Error ? loadError.message : 'טעינת האירועים נכשלה.'); }
-  };
-  useEffect(() => {
-    let active = true;
-    void rescueApi.listAlerts()
-      .then((data) => { if (active) { setError(null); setAlerts(data); } })
-      .catch((loadError: unknown) => {
-        if (active) setError(loadError instanceof Error ? loadError.message : 'טעינת האירועים נכשלה.');
-      });
-    return () => { active = false; };
-  }, []);
 
   const filteredAlerts = useMemo(() => alerts.filter((alert) => (
     (!title || alert.title.toLowerCase().includes(title.toLowerCase()))
@@ -45,8 +36,8 @@ export default function EventTable() {
 
   const resolveAlert = async (alert: ApiAlert) => {
     if (!window.confirm(`לסגור את האירוע "${alert.title}"?`)) return;
-    try { await rescueApi.updateAlert(alert.id, { status: 'RESOLVED' }); await loadAlerts(); }
-    catch (updateError) { setError(updateError instanceof Error ? updateError.message : 'סגירת האירוע נכשלה.'); }
+    try { await rescueApi.updateAlert(alert.id, { status: 'RESOLVED' }); await alertsResource.refresh(); }
+    catch (updateError) { setActionError(updateError instanceof Error ? updateError.message : 'סגירת האירוע נכשלה.'); }
   };
 
   const openDispatcher = async (alert: ApiAlert) => {
@@ -59,7 +50,7 @@ export default function EventTable() {
       setResponders(users.filter((user) => user.role === 'user'));
     } catch (loadError) {
       setDispatchTarget(null);
-      setError(loadError instanceof Error ? loadError.message : 'טעינת המתנדבים נכשלה.');
+      setActionError(loadError instanceof Error ? loadError.message : 'טעינת המתנדבים נכשלה.');
     } finally {
       setLoadingResponders(false);
     }
@@ -77,9 +68,9 @@ export default function EventTable() {
     try {
       await rescueApi.dispatchAlert(dispatchTarget.id, selectedResponderIds);
       setDispatchTarget(null);
-      await loadAlerts();
+      await alertsResource.refresh();
     } catch (dispatchError) {
-      setError(dispatchError instanceof Error ? dispatchError.message : 'שיבוץ המתנדבים נכשל.');
+      setActionError(dispatchError instanceof Error ? dispatchError.message : 'שיבוץ המתנדבים נכשל.');
     } finally {
       setSubmittingDispatch(false);
     }
@@ -92,7 +83,8 @@ export default function EventTable() {
 
   return (
     <div className="table-wrapper" dir="rtl">
-      {error && <p role="alert">{error}</p>}
+      <ResourceState error={alertsResource.error} loading={alertsResource.loading} refreshing={alertsResource.refreshing} empty={alerts.length === 0} onRetry={() => void alertsResource.refresh()} loadingLabel="טוען אירועים…" emptyLabel="אין אירועים להצגה." />
+      {actionError && <p role="alert">{actionError}</p>}
       <table className="event-table">
         <thead>
             <tr><th>אירוע</th><th>מיקום</th><th>סטטוס</th><th>עדיפות</th><th>נפתח</th><th>מתנדבים</th><th>פעולות</th></tr>
@@ -101,7 +93,7 @@ export default function EventTable() {
             <th />
             <th><select value={status} onChange={(event) => setStatus(event.target.value as typeof status)}><option value="ALL">הכל</option>{Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></th>
             <th><select value={priority} onChange={(event) => setPriority(event.target.value as typeof priority)}><option value="ALL">הכל</option>{Object.entries(priorityLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></th>
-            <th /><th /><th><button type="button" className="clear-btn" onClick={() => void loadAlerts()}>רענן</button></th>
+            <th /><th /><th><button type="button" className="clear-btn" onClick={() => void alertsResource.refresh()} disabled={alertsResource.loading || alertsResource.refreshing}>רענן</button></th>
           </tr>
         </thead>
         <tbody>

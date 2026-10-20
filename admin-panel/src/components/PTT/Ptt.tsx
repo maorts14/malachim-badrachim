@@ -3,28 +3,36 @@ import { Room, RoomEvent, Track } from "livekit-client";
 import { Mic, Radio, RefreshCw, Users } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { rescueApi, type ApiGroup, type ApiUser } from "@/services/api";
+import ResourceState from "../ResourceState/ResourceState";
+import { useDashboardResource } from "../../hooks/useDashboardResource";
 import "./Ptt.css";
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "הפעולה נכשלה. נסו שוב.";
+const emptyGroups: ApiGroup[] = [];
+const emptyUsers: ApiUser[] = [];
 
 export default function Ptt() {
   const { user } = useAuth();
   const room = useRef<Room | null>(null);
   const audioElements = useRef<HTMLAudioElement[]>([]);
-  const [groups, setGroups] = useState<ApiGroup[]>([]);
-  const [users, setUsers] = useState<ApiUser[]>([]);
+  const loadWorkspace = useCallback(async (): Promise<{ groups: ApiGroup[]; users: ApiUser[] }> => {
+    const [groups, users] = await Promise.all([rescueApi.listGroups(), rescueApi.listUsers()]);
+    return { groups, users };
+  }, []);
+  const workspaceResource = useDashboardResource(loadWorkspace);
+  const groups = workspaceResource.data?.groups ?? emptyGroups;
+  const users = workspaceResource.data?.users ?? emptyUsers;
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [members, setMembers] = useState<number[]>([]);
   const [groupName, setGroupName] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [transmitting, setTransmitting] = useState(false);
   const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? null;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
   const canManageGroups = user?.role === "manager";
 
   const disconnect = useCallback(async () => {
@@ -45,32 +53,18 @@ export default function Ptt() {
     setMembers(group.members);
   }, [disconnect]);
 
-  const loadWorkspace = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [nextGroups, nextUsers] = await Promise.all([rescueApi.listGroups(), rescueApi.listUsers()]);
-      setGroups(nextGroups);
-      setUsers(nextUsers);
-      const nextSelected = nextGroups.find((group) => group.id === selectedGroupId) ?? nextGroups[0];
-      if (nextSelected) await selectGroup(nextSelected);
-      else setSelectedGroupId(null);
-    } catch (loadError) {
-      setError(errorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }, [selectGroup, selectedGroupId]);
+  useEffect(() => {
+    if (selectedGroupId === null && groups[0]) queueMicrotask(() => { void selectGroup(groups[0]); });
+  }, [groups, selectGroup, selectedGroupId]);
 
   useEffect(() => {
-    void loadWorkspace();
     return () => { void disconnect(); };
-  }, [disconnect, loadWorkspace]);
+  }, [disconnect]);
 
   const joinSelectedGroup = async () => {
     if (!selectedGroup || room.current || connecting) return;
     setConnecting(true);
-    setError(null);
+    setActionError(null);
     try {
       const credentials = await rescueApi.getPttRoomCredentials(selectedGroup.id);
       const nextRoom = new Room();
@@ -100,7 +94,7 @@ export default function Ptt() {
       room.current = nextRoom;
       setConnected(true);
     } catch (joinError) {
-      setError(errorMessage(joinError));
+      setActionError(errorMessage(joinError));
     } finally {
       setConnecting(false);
     }
@@ -116,7 +110,7 @@ export default function Ptt() {
       await room.current.localParticipant.setMicrophoneEnabled(true);
       setTransmitting(true);
     } catch (transmitError) {
-      setError(errorMessage(transmitError));
+      setActionError(errorMessage(transmitError));
     }
   };
 
@@ -129,12 +123,12 @@ export default function Ptt() {
   const saveGroup = async () => {
     if (!selectedGroup || !groupName.trim()) return;
     setSaving(true);
-    setError(null);
+    setActionError(null);
     try {
       await rescueApi.updateGroup(selectedGroup.id, { name: groupName.trim(), members });
-      await loadWorkspace();
+      await workspaceResource.refresh();
     } catch (saveError) {
-      setError(errorMessage(saveError));
+      setActionError(errorMessage(saveError));
     } finally {
       setSaving(false);
     }
@@ -143,14 +137,14 @@ export default function Ptt() {
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
     setSaving(true);
-    setError(null);
+    setActionError(null);
     try {
       const created = await rescueApi.createGroup({ name: newGroupName.trim(), members: [] });
       setNewGroupName("");
-      await loadWorkspace();
+      await workspaceResource.refresh();
       await selectGroup(created);
     } catch (createError) {
-      setError(errorMessage(createError));
+      setActionError(errorMessage(createError));
     } finally {
       setSaving(false);
     }
@@ -162,10 +156,11 @@ export default function Ptt() {
   return <main className="ptt" dir="rtl">
     <header className="ptt__header">
       <div><h1>קשר קולי קבוצתי</h1><p>שידור חי בלבד. אודיו אינו נשמר או נשלח כהודעה.</p></div>
-      <button type="button" className="ptt__icon-button" onClick={() => void loadWorkspace()} disabled={loading} aria-label="רענון"><RefreshCw size={18} /></button>
+      <button type="button" className="ptt__icon-button" onClick={() => void workspaceResource.refresh()} disabled={workspaceResource.loading || workspaceResource.refreshing} aria-label="רענון"><RefreshCw size={18} /></button>
     </header>
-    {error && <p className="ptt__error" role="alert">{error}</p>}
-    {loading ? <p className="ptt__state">טוען קבוצות קשר…</p> : groups.length === 0 ? <section className="ptt__empty"><p className="ptt__state">אין קבוצות קשר זמינות.</p>{canManageGroups && <><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="שם קבוצה חדשה" /><button type="button" onClick={() => void createGroup()} disabled={saving || !newGroupName.trim()}>צור קבוצה</button></>}</section> : <div className="ptt__layout">
+    <ResourceState error={workspaceResource.error} loading={workspaceResource.loading} refreshing={workspaceResource.refreshing} empty={groups.length === 0} onRetry={() => void workspaceResource.refresh()} loadingLabel="טוען קבוצות קשר…" emptyLabel="אין קבוצות קשר זמינות." />
+    {actionError && <p className="ptt__error" role="alert">{actionError}</p>}
+    {!workspaceResource.loading && groups.length === 0 ? <section className="ptt__empty">{canManageGroups && <><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="שם קבוצה חדשה" /><button type="button" onClick={() => void createGroup()} disabled={saving || !newGroupName.trim()}>צור קבוצה</button></>}</section> : groups.length > 0 ? <div className="ptt__layout">
       <aside className="ptt__groups"><h2>קבוצות</h2>{groups.map((group) => <button type="button" key={group.id} className={group.id === selectedGroupId ? "ptt__group ptt__group--active" : "ptt__group"} onClick={() => void selectGroup(group)}>{group.name}<small>{group.members.length} חברים</small></button>)}</aside>
       <section className="ptt__conversation">
         <h2>{selectedGroup?.name}</h2>
@@ -175,6 +170,6 @@ export default function Ptt() {
         {connected && <button type="button" className="ptt__leave" onClick={() => void disconnect()}><Radio size={16} /> נתק/י קשר</button>}
       </section>
       {canManageGroups && <aside className="ptt__manage"><h2>ניהול קבוצה</h2><input value={groupName} onChange={(event) => setGroupName(event.target.value)} aria-label="שם הקבוצה" />{users.map((member) => <label key={member.user_id}><input type="checkbox" checked={members.includes(member.user_id)} onChange={() => toggleMember(member.user_id)} />{member.display_name || member.username}</label>)}<button type="button" onClick={() => void saveGroup()} disabled={saving || !groupName.trim()}>שמור חברים ושם</button><hr /><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="שם קבוצה חדשה" /><button type="button" onClick={() => void createGroup()} disabled={saving || !newGroupName.trim()}>צור קבוצה</button></aside>}
-    </div>}
+    </div> : null}
   </main>;
 }
