@@ -9,7 +9,7 @@ from django.core import mail
 from django.test import TransactionTestCase
 from django.test import override_settings
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 from asgiref.sync import async_to_sync, sync_to_async
 from channels.testing import WebsocketCommunicator
@@ -245,6 +245,117 @@ class AlertDispatchContractTests(APITestCase):
         )
         self.assertEqual(volunteer_profile['id'], self.volunteer.userprofile.id)
         self.assertEqual(volunteer_profile['user_id'], self.volunteer.id)
+
+
+class CrossClientPersistenceTests(APITestCase):
+    """Two independent clients prove operational data survives a client reload."""
+
+    def setUp(self):
+        self.dispatcher = User.objects.create_user(
+            username='e2e-dispatcher', email='e2e-dispatcher@example.com', is_staff=True,
+        )
+        self.dispatcher.userprofile.role = UserProfile.Role.EMERGENCY_DISPATCHER
+        self.dispatcher.userprofile.save(update_fields=['role'])
+        self.manager = User.objects.create_user(
+            username='e2e-manager', email='e2e-manager@example.com', is_staff=True,
+        )
+        self.manager.userprofile.role = UserProfile.Role.MANAGER
+        self.manager.userprofile.save(update_fields=['role'])
+        self.volunteer = User.objects.create_user(
+            username='e2e-volunteer', email='e2e-volunteer@example.com',
+        )
+        self.dispatcher_client = APIClient()
+        self.dispatcher_client.force_authenticate(self.dispatcher)
+        self.manager_client = APIClient()
+        self.manager_client.force_authenticate(self.manager)
+        self.volunteer_client = APIClient()
+        self.volunteer_client.force_authenticate(self.volunteer)
+
+    def test_incident_dispatch_and_message_are_visible_to_a_reloaded_volunteer_client(self):
+        created = self.dispatcher_client.post(
+            '/api/alerts/',
+            {
+                'title': 'E2E roadside incident',
+                'description': 'Created by the dispatcher client',
+                'latitude': 32.0853,
+                'longitude': 34.7818,
+                'priority': 'HIGH',
+            },
+            format='json',
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        alert_id = created.data['id']
+
+        dispatched = self.dispatcher_client.post(
+            f'/api/alerts/{alert_id}/dispatch/',
+            {'user_ids': [self.volunteer.id]},
+            format='json',
+        )
+        self.assertEqual(dispatched.status_code, status.HTTP_200_OK)
+
+        # A new client models a page/app reload rather than reusing local state.
+        reloaded_volunteer = APIClient()
+        reloaded_volunteer.force_authenticate(self.volunteer)
+        visible_alerts = reloaded_volunteer.get('/api/alerts/')
+        self.assertEqual(visible_alerts.status_code, status.HTTP_200_OK)
+        visible_alert = next(item for item in visible_alerts.data if item['id'] == alert_id)
+        self.assertEqual(visible_alert['assignments'][0]['user_id'], self.volunteer.id)
+
+        sent = self.dispatcher_client.post(
+            '/api/message/',
+            {'alert': alert_id, 'title': 'Dispatch update', 'text': 'Proceed to the incident.'},
+            format='json',
+        )
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED)
+
+        reloaded_messages = reloaded_volunteer.get('/api/message/', {'alert': alert_id})
+        self.assertEqual(reloaded_messages.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [(message['title'], message['text']) for message in reloaded_messages.data],
+            [('Dispatch update', 'Proceed to the incident.')],
+        )
+
+    def test_group_membership_change_is_visible_after_client_reload(self):
+        created = self.manager_client.post(
+            '/api/group/',
+            {'name': 'E2E operational group', 'members': []},
+            format='json',
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        group_id = created.data['id']
+
+        before_membership = self.volunteer_client.get('/api/group/')
+        self.assertEqual(before_membership.status_code, status.HTTP_200_OK)
+        self.assertNotIn(group_id, [group['id'] for group in before_membership.data])
+
+        changed = self.manager_client.patch(
+            f'/api/group/{group_id}/',
+            {'members': [self.volunteer.id]},
+            format='json',
+        )
+        self.assertEqual(changed.status_code, status.HTTP_200_OK)
+
+        reloaded_volunteer = APIClient()
+        reloaded_volunteer.force_authenticate(self.volunteer)
+        after_add = reloaded_volunteer.get('/api/group/')
+        self.assertEqual(after_add.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            next(group for group in after_add.data if group['id'] == group_id)['members'],
+            [self.volunteer.id],
+        )
+
+        removed = self.manager_client.patch(
+            f'/api/group/{group_id}/',
+            {'members': []},
+            format='json',
+        )
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+
+        reloaded_after_removal = APIClient()
+        reloaded_after_removal.force_authenticate(self.volunteer)
+        after_removal = reloaded_after_removal.get('/api/group/')
+        self.assertEqual(after_removal.status_code, status.HTTP_200_OK)
+        self.assertNotIn(group_id, [group['id'] for group in after_removal.data])
 
 
 @override_settings(
