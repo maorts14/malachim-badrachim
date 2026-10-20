@@ -4,6 +4,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../domain/services/api/rest_api_service.dart';
 import '../models/alert_message.dart';
 
+typedef EventLoader = Future<AlertMessage> Function(int eventId);
+
 class EventDetailScreen extends StatefulWidget {
   const EventDetailScreen({super.key, required this.event});
 
@@ -14,9 +16,14 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class EventDetailLoaderScreen extends StatefulWidget {
-  const EventDetailLoaderScreen({super.key, required this.eventId});
+  const EventDetailLoaderScreen({
+    super.key,
+    required this.eventId,
+    this.loadEvent,
+  });
 
   final int eventId;
+  final EventLoader? loadEvent;
 
   @override
   State<EventDetailLoaderScreen> createState() =>
@@ -29,10 +36,11 @@ class _EventDetailLoaderScreenState extends State<EventDetailLoaderScreen> {
   @override
   void initState() {
     super.initState();
-    _event = _load();
+    _event = _loadEvent();
   }
 
-  Future<AlertMessage> _load() async {
+  Future<AlertMessage> _loadEvent() async {
+    if (widget.loadEvent != null) return widget.loadEvent!(widget.eventId);
     final data = await RestApiService().getAlert(widget.eventId);
     return AlertMessage.fromJson(data);
   }
@@ -48,7 +56,7 @@ class _EventDetailLoaderScreenState extends State<EventDetailLoaderScreen> {
             backgroundColor: const Color(0xfff6f7f4),
             body: Center(
               child: TextButton(
-                onPressed: () => setState(() => _event = _load()),
+                onPressed: () => setState(() => _event = _loadEvent()),
                 child: const Text('לא ניתן לטעון את האירוע. נסו שוב'),
               ),
             ),
