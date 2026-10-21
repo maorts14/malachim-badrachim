@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:rescue_app/models/message.dart';
-import 'package:rescue_app/widgets/message_audio.dart';
 import 'package:rescue_app/widgets/message_text.dart';
 
 class HistoryList extends StatelessWidget {
@@ -44,12 +43,7 @@ class HistoryList extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final message = messages[index];
-        final hasAudio = (message.voiceUrl?.trim().isNotEmpty ?? false) ||
-            (message.voiceFile?.trim().isNotEmpty ?? false);
-
-        return hasAudio
-            ? MessageAudio(message: message)
-            : MessageText(message: message);
+        return MessageText(message: message);
       },
     );
   }

@@ -14,11 +14,12 @@ class UserGroup extends Equatable {
   final int memberCount;
 
   factory UserGroup.fromJson(Map<String, dynamic> json) {
+    final members = json['members'] as List<dynamic>;
     return UserGroup(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
-      memberCount: (json['memberCount'] as num?)?.toInt() ?? 0,
+      id: json['id'].toString(),
+      name: json['name'] as String,
+      description: '',
+      memberCount: members.length,
     );
   }
 

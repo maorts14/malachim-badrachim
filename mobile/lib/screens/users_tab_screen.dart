@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rescue_app/constants/app_colors.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/models/user_details.dart';
@@ -37,11 +36,12 @@ class _UsersTabScreenState extends State<UsersTabScreen> {
     });
     try {
       final contacts = await RestApiService().getAllUsers();
-      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final currentUser = await RestApiService().whoAmI();
+      final currentUsername = currentUser['username'] as String;
       if (mounted) {
         setState(() {
           _contacts = contacts
-              .where((contact) => contact.username != currentUid)
+              .where((contact) => contact.username != currentUsername)
               .toList(growable: false);
         });
       }

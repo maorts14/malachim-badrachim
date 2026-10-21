@@ -158,26 +158,19 @@ CHANNEL_LAYERS = {
 
 
 # DATABASE CONFIGURATION
-
-if config("POSTGRES_HOST", default=None):
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.contrib.gis.db.backends.postgis",
-            "NAME": config("POSTGRES_DB", default="rescue_alert"),
-            "USER": config("POSTGRES_USER", default="rescue_user"),
-            "PASSWORD": config("POSTGRES_PASSWORD", default="change_me_now"),
-            "HOST": config("POSTGRES_HOST", default="db"),
-            "PORT": config("POSTGRES_PORT", default="5432"),
-        }
+#
+# This application requires PostGIS. GIS migrations and distance queries must
+# run against the same database engine in local development, CI, and production.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.contrib.gis.db.backends.postgis",
+        "NAME": config("POSTGRES_DB"),
+        "USER": config("POSTGRES_USER"),
+        "PASSWORD": config("POSTGRES_PASSWORD"),
+        "HOST": config("POSTGRES_HOST"),
+        "PORT": config("POSTGRES_PORT", default="5432"),
     }
-else:
-    # Fallback to SQLite for local development
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 
 # PASSWORD VALIDATION
@@ -232,6 +225,20 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+SIMPLE_JWT = {
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@rescue-alert.local')
+PASSWORD_RESET_URL = config('PASSWORD_RESET_URL', default='')
+
+# LiveKit is the realtime PTT transport. Clients obtain short-lived, room-scoped
+# tokens from Django; the API secret is never exposed to a browser or mobile app.
+LIVEKIT_URL = config('LIVEKIT_URL', default='')
+LIVEKIT_API_KEY = config('LIVEKIT_API_KEY', default='')
+LIVEKIT_API_SECRET = config('LIVEKIT_API_SECRET', default='')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Rescue Alert System API',

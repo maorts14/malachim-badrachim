@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rescue_app/constants/app_env.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/models/message.dart';
@@ -55,17 +53,17 @@ class MessageRepository {
   Future<void> _startRealtime() async {
     if (!_realtimeWanted || _socket != null) return;
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final token = _apiClient.accessToken;
       if (token == null || token.isEmpty) return;
       final apiUri = Uri.parse(AppEnv.apiBaseUrl);
       final socketUri = apiUri.replace(
         scheme: apiUri.scheme == 'https' ? 'wss' : 'ws',
         path: '/ws/messages/',
-        query: null,
+        queryParameters: {'token': token},
       );
       final channel = WebSocketChannel.connect(
         socketUri,
-        protocols: ['rescue-v1', token],
+        protocols: const ['rescue-v1'],
       );
       await channel.ready;
       if (!_realtimeWanted) {
@@ -97,11 +95,14 @@ class MessageRepository {
   void _handleRealtimeEvent(dynamic rawEvent) {
     try {
       final event = jsonDecode(rawEvent as String) as Map<String, dynamic>;
-      if (event['type'] != 'message.created' || event['message'] is! Map) return;
+      if (event['type'] != 'message.created' || event['message'] is! Map) {
+        return;
+      }
       final message = Message.fromJson(
         Map<String, dynamic>.from(event['message'] as Map),
       );
-      final current = List<Message>.from(_messageStream.valueOrNull ?? const []);
+      final current =
+          List<Message>.from(_messageStream.valueOrNull ?? const []);
       if (current.any((existing) => existing.id == message.id)) return;
       _messageStream.add([message, ...current]);
     } catch (_) {
@@ -126,12 +127,10 @@ class MessageRepository {
   Future<void> postMessage({
     required String title,
     required String text,
-    Uint8List? voicePayload,
   }) async {
     await _apiClient.postMessage(
       title: title,
       text: text,
-      voicePayload: voicePayload,
     );
     await refreshMessages();
   }

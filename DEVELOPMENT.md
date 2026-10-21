@@ -4,6 +4,9 @@ The first local environment uses the `rescue-alert-system-local` Firebase
 project and an isolated PostGIS database. It does not access the production
 Firebase project or production database.
 
+PostGIS is mandatory for this application. SQLite is unsupported, including
+for local development and tests.
+
 ## One-time setup
 
 1. Copy `.env.local.example` to `.env.local` and choose a local-only database
@@ -22,12 +25,60 @@ Firebase project or production database.
 ## Start the backend, database, and admin panel
 
 ```powershell
-docker compose --env-file .env.local -f docker-compose.local.yml up --build
+.\scripts\dev.ps1 up
 ```
+
+This is the supported local-development entry point. It starts PostGIS, Redis,
+LiveKit in development mode, the Django API, and the Vite admin panel. It is deliberately separate from the
+root `docker-compose.yml`, which is production-oriented and does not start a
+long-lived Vite development server by default.
+
+Use the helper commands below for the rest of the local lifecycle:
+
+```powershell
+.\scripts\dev.ps1 status  # show container state and health
+.\scripts\dev.ps1 down    # stop the local stack
+.\scripts\dev.ps1 reset   # delete local Docker volumes, then start again
+```
+
+`reset` permanently removes the local PostGIS and admin-panel Docker volumes.
+It never touches remote environments, but it does delete local development
+data.
 
 - API: `http://localhost:8004/api/`
 - Admin panel: `http://localhost:5173/`
 - Postgres (host only): `127.0.0.1:15432`
+- Live PTT (host only): `ws://localhost:7880`
+
+## Live push-to-talk
+
+PTT is a LiveKit room per operational group. The backend issues a short-lived,
+group-scoped token; audio is streamed directly between clients through LiveKit
+and is never uploaded to Django or stored as a message.
+
+The local LiveKit service uses the development credentials already present in
+`.env.local.example`. For Android emulator PTT testing, set `LIVEKIT_URL` in
+the backend's `.env.local` to `ws://10.0.2.2:7880` and restart the backend.
+Switch it back to `ws://localhost:7880` when testing the browser admin panel.
+For a physical device, use the computer's reachable LAN address instead.
+
+Production needs a publicly reachable, TLS-enabled LiveKit deployment. Set
+`LIVEKIT_URL` to its `wss://` URL and set `LIVEKIT_API_KEY` and
+`LIVEKIT_API_SECRET` to that server's credentials. Do not use the local
+development credentials outside local development.
+
+## Reset the local database after the initial-schema migration reset
+
+The alert migrations are intentionally a single initial schema because no
+deployment needs an upgrade path. If you previously ran the old migration
+chain, recreate the local Compose data once before starting the stack again:
+
+```powershell
+.\scripts\dev.ps1 reset
+```
+
+This removes local development data and Docker volumes; it does not affect a
+remote environment. The command asks for confirmation before deleting anything.
 
 ## Run the Android app
 

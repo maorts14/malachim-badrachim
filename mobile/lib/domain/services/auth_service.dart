@@ -1,23 +1,52 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:rescue_app/domain/services/api/rest_api_service.dart';
+import 'package:rescue_app/managers/storage_manager.dart';
 
 class AuthService {
-  AuthService({FirebaseAuth? firebaseAuth})
-      : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+  AuthService._() {
+    _apiClient.onSessionExpired = () => session.value = false;
+  }
 
-  final FirebaseAuth _firebaseAuth;
+  static final AuthService _instance = AuthService._();
+  factory AuthService() => _instance;
 
-  User? get currentUser => _firebaseAuth.currentUser;
+  final RestApiService _apiClient = RestApiService();
+  final ValueNotifier<bool> session = ValueNotifier<bool>(false);
 
-  Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
+  bool get isAuthenticated => session.value;
+
+  Future<void> restoreSession() async {
+    final refresh = await StorageManager.instance.getJwtRefreshToken();
+    if (refresh == null || refresh.isEmpty) return;
+    try {
+      await _apiClient.refreshAccessToken(refreshToken: refresh);
+      session.value = true;
+    } catch (_) {
+      await _apiClient.clearTokens();
+      session.value = false;
+    }
+  }
 
   Future<void> signIn({required String email, required String password}) async {
-    await _firebaseAuth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+    await _apiClient.obtainToken(username: email, password: password);
+    session.value = true;
+  }
+
+  Future<void> signUp({
+    required String email,
+    required String password,
+    String fullName = '',
+  }) async {
+    await _apiClient.register(
+        email: email, password: password, fullName: fullName);
+    session.value = true;
   }
 
   Future<void> signOut() async {
-    await _firebaseAuth.signOut();
+    try {
+      await _apiClient.logout();
+    } finally {
+      session.value = false;
+    }
   }
 }

@@ -14,6 +14,7 @@ from .models import (
     Message,
     Notification,
 )
+from .permissions import is_dispatcher
 
 
 class DeviceRegistrationSerializer(serializers.Serializer):
@@ -75,7 +76,7 @@ class SessionLoginSerializer(serializers.Serializer):
         authenticated = authenticate(username=user.username, password=attrs['password'])
         if authenticated is None or not authenticated.is_active:
             raise serializers.ValidationError('Invalid credentials.')
-        if not authenticated.is_staff:
+        if not authenticated.is_staff or not is_dispatcher(authenticated):
             raise serializers.ValidationError('This account cannot access the dispatcher panel.')
         attrs['user'] = authenticated
         return attrs
@@ -115,7 +116,6 @@ class GroupSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = serializers.SerializerMethodField()
-    voice_url = serializers.SerializerMethodField()
     alert = serializers.PrimaryKeyRelatedField(
         queryset=Alert.objects.all(), required=False, allow_null=True,
     )
@@ -132,8 +132,6 @@ class MessageSerializer(serializers.ModelSerializer):
             'group',
             'title',
             'text',
-            'voice_file',
-            'voice_url',
             'latitude',
             'longitude',
             'timestamp',
@@ -157,13 +155,6 @@ class MessageSerializer(serializers.ModelSerializer):
             "email": obj.sender.email,
             "role": profile.role if profile else None,
         }
-
-    @extend_schema_field({'type': 'string', 'format': 'uri', 'nullable': True})
-    def get_voice_url(self, obj):
-        if obj.voice_file:
-            return obj.voice_file.url
-        return None
-
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:

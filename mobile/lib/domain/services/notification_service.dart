@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/firebase_options.dart';
-import 'auth_service.dart';
 import 'deeplink_service.dart';
 import 'device_service.dart';
 
@@ -26,16 +24,13 @@ const _androidChannel = AndroidNotificationChannel(
 
 class NotificationService {
   NotificationService({
-    required AuthService authService,
     required DeepLinkService deepLinkService,
     required RestApiService apiClient,
     required DeviceService deviceService,
-  })  : _authService = authService,
-        _deepLinkService = deepLinkService,
+  })  : _deepLinkService = deepLinkService,
         _apiClient = apiClient,
         _deviceService = deviceService;
 
-  final AuthService _authService;
   final DeepLinkService _deepLinkService;
   final RestApiService _apiClient;
   final DeviceService _deviceService;
@@ -43,7 +38,6 @@ class NotificationService {
   final _localNotifications = FlutterLocalNotificationsPlugin();
   StreamSubscription<RemoteMessage>? _foregroundSub;
   StreamSubscription<String>? _tokenRefreshSub;
-  StreamSubscription<User?>? _authStateSub;
 
   Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -56,17 +50,10 @@ class NotificationService {
       sound: true,
     );
 
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-
     _tokenRefreshSub = messaging.onTokenRefresh.listen(_registerToken);
     _foregroundSub = FirebaseMessaging.onMessage.listen(
       _handleForegroundMessage,
     );
-    _authStateSub = _authService.authStateChanges.listen((user) async {
-      if (user != null) {
-        await registerCurrentToken();
-      }
-    });
     FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteMessage);
 
     final initialMessage = await messaging.getInitialMessage();
@@ -145,10 +132,10 @@ class NotificationService {
   }
 
   Future<void> _registerToken(String token) async {
-    if (_authService.currentUser == null) return;
+    if (!await _apiClient.checkDioHeaders()) return;
     try {
       await _apiClient.registerDevice(
-        fcmToken: token,
+        pushToken: token,
         deviceId: await _deviceService.getDeviceId(),
         platform: _deviceService.getPlatform(),
         deviceModel: await _deviceService.getDeviceModel(),
@@ -189,14 +176,11 @@ class NotificationService {
   String? _routeFromData(Map<String, dynamic> data) {
     final deepLink = data['deepLink']?.toString();
     if (deepLink != null && deepLink.isNotEmpty) return deepLink;
-    final messageId = data['messageId']?.toString();
-    if (messageId != null) return '/messages/$messageId';
     return null;
   }
 
   Future<void> dispose() async {
     await _foregroundSub?.cancel();
     await _tokenRefreshSub?.cancel();
-    await _authStateSub?.cancel();
   }
 }

@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rescue_app/constants/app_env.dart';
 import 'package:rescue_app/managers/storage_manager.dart';
@@ -29,20 +28,49 @@ class RestApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final String? storedAuthorization =
-              await StorageManager.instance.authorization();
+          final String? storedAccessToken =
+              await StorageManager.instance.getJwtAccessToken();
 
-          // The Firebase token is refreshed for the active session. Prefer it
-          // over a persisted value, which can be expired after the app has
-          // been closed and was causing authenticated screens to receive 401.
           if (_accessToken != null && _accessToken!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_accessToken';
-          } else if (storedAuthorization != null &&
-              storedAuthorization.isNotEmpty) {
-            options.headers['Authorization'] = storedAuthorization;
+          } else if (storedAccessToken != null &&
+              storedAccessToken.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $storedAccessToken';
           }
 
           handler.next(options);
+        },
+        onError: (error, handler) async {
+          final request = error.requestOptions;
+          final isTokenRoute = request.path.startsWith('/api/token/');
+          if (error.response?.statusCode != 401 ||
+              request.extra['jwtRetried'] == true ||
+              isTokenRoute) {
+            handler.next(error);
+            return;
+          }
+
+          final refresh = _refreshToken ??
+              await StorageManager.instance.getJwtRefreshToken();
+          if (refresh == null || refresh.isEmpty) {
+            await clearTokens();
+            onSessionExpired?.call();
+            handler.next(error);
+            return;
+          }
+
+          try {
+            final refreshedAccess =
+                await refreshAccessToken(refreshToken: refresh);
+            request.headers['Authorization'] = 'Bearer $refreshedAccess';
+            request.extra['jwtRetried'] = true;
+            final replay = await _dio.fetch(request);
+            handler.resolve(replay);
+          } catch (_) {
+            await clearTokens();
+            onSessionExpired?.call();
+            handler.next(error);
+          }
         },
       ),
     );
@@ -51,6 +79,7 @@ class RestApiService {
   final Dio _dio;
   String? _accessToken;
   String? _refreshToken;
+  VoidCallback? onSessionExpired;
 
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;
@@ -63,6 +92,8 @@ class RestApiService {
     _refreshToken = refresh;
     _dio.options.headers['Authorization'] = 'Bearer $_accessToken';
     _dio.options.headers['Content-Type'] = 'application/json';
+    await StorageManager.instance
+        .saveJwtTokens(access: access, refresh: refresh);
   }
 
   Future<void> setAccessAuthToken({required String access}) async {
@@ -80,22 +111,19 @@ class RestApiService {
     if (hasDioHeaders()) {
       return true;
     } else {
-      final User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        final String? token = await currentUser.getIdToken();
-        if (token != null && token.isNotEmpty) {
-          await setAccessAuthToken(access: token);
-          return true;
-        }
-      }
-      return false;
+      final storedAccessToken =
+          await StorageManager.instance.getJwtAccessToken();
+      if (storedAccessToken == null || storedAccessToken.isEmpty) return false;
+      await setAccessAuthToken(access: storedAccessToken);
+      return true;
     }
   }
 
-  void clearTokens() {
+  Future<void> clearTokens() async {
     _accessToken = null;
     _refreshToken = null;
     _dio.options.headers.remove('Authorization');
+    await StorageManager.instance.clearJwtTokens();
   }
 
   Future<void> postCurrentLocation({
@@ -257,22 +285,16 @@ class RestApiService {
   Future<List<Message>> postMessage({
     required String title,
     required String text,
-    Uint8List? voicePayload,
   }) async {
     try {
       if (!await checkDioHeaders()) {
         return const [];
       }
 
-      final data = FormData.fromMap({
+      final data = <String, dynamic>{
         'title': title,
         'text': text,
-        if (voicePayload != null)
-          'voice_file': MultipartFile.fromBytes(
-            voicePayload,
-            filename: 'voice_note.m4a',
-          ),
-      });
+      };
 
       final response = await _dio.post('/api/message/', data: data);
       if (response.data == null || response.data is! Map<String, dynamic>) {
@@ -290,7 +312,7 @@ class RestApiService {
   }
 
   Future<void> registerDevice({
-    required String fcmToken,
+    required String pushToken,
     required String deviceId,
     required String platform,
     required String deviceModel,
@@ -301,7 +323,7 @@ class RestApiService {
       }
 
       await _dio.post('/api/notifications/token', data: {
-        'fcm_token': fcmToken,
+        'push_token': pushToken,
         'device_id': deviceId,
         'platform': platform,
         'device_model': deviceModel,
@@ -328,8 +350,45 @@ class RestApiService {
     );
 
     final tokens = JwtTokens.fromJson(_asMap(response.data));
-    setAuthToken(access: tokens.access, refresh: tokens.refresh);
+    await setAuthToken(access: tokens.access, refresh: tokens.refresh);
     return tokens;
+  }
+
+  Future<JwtTokens> register({
+    required String email,
+    required String password,
+    String fullName = '',
+  }) async {
+    final response = await _safePost(
+      '/api/auth/register/',
+      data: <String, dynamic>{
+        'email': email,
+        'password': password,
+        'full_name': fullName,
+      },
+    );
+    final tokens = JwtTokens.fromJson(_asMap(response.data));
+    await setAuthToken(access: tokens.access, refresh: tokens.refresh);
+    return tokens;
+  }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    await _safePost('/api/auth/password-reset/',
+        data: <String, dynamic>{'email': email});
+  }
+
+  Future<void> confirmPasswordReset({
+    required String uid,
+    required String token,
+    required String password,
+  }) async {
+    await _safePost('/api/auth/password-reset/$uid/$token/',
+        data: <String, dynamic>{'password': password});
+  }
+
+  Future<Map<String, dynamic>> whoAmI() async {
+    final response = await _safeGet('/api/auth/whoami/');
+    return _asMap(_asMap(response.data)['user']);
   }
 
   Future<String> refreshAccessToken({String? refreshToken}) async {
@@ -345,8 +404,22 @@ class RestApiService {
 
     final data = _asMap(response.data);
     final access = data['access'] as String;
+    final refreshedToken = data['refresh'] as String? ?? token;
     _accessToken = access;
+    _refreshToken = refreshedToken;
+    await StorageManager.instance
+        .saveJwtTokens(access: access, refresh: refreshedToken);
     return access;
+  }
+
+  Future<void> logout() async {
+    final refresh =
+        _refreshToken ?? await StorageManager.instance.getJwtRefreshToken();
+    if (refresh != null && refresh.isNotEmpty) {
+      await _safePost('/api/auth/logout/',
+          data: <String, dynamic>{'refresh': refresh});
+    }
+    await clearTokens();
   }
 
   Future<List<dynamic>> listUsers() async {
@@ -485,6 +558,16 @@ class RestApiService {
     return _asMap(response.data);
   }
 
+  Future<Map<String, dynamic>> getPttRoomCredentials(int groupId) async {
+    final response = await _safePost('/api/group/$groupId/ptt-token/');
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      throw StateError(_apiErrorMessage(response.data));
+    }
+    return _asMap(response.data);
+  }
+
   Future<Map<String, dynamic>> updateGroup({
     required int id,
     required String name,
@@ -553,27 +636,20 @@ class RestApiService {
   Future<Map<String, dynamic>> createMessage({
     required String title,
     required String text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
     int? alertId,
     int? groupId,
   }) async {
-    final payload = await _buildMessagePayload(
+    final payload = _buildMessagePayload(
       title: title,
       text: text,
-      voiceFile: voiceFile,
       latitude: latitude,
       longitude: longitude,
     );
 
-    if (payload is Map<String, dynamic>) {
-      if (alertId != null) payload['alert'] = alertId;
-      if (groupId != null) payload['group'] = groupId;
-    } else if (payload is FormData) {
-      if (alertId != null) payload.fields.add(MapEntry('alert', '$alertId'));
-      if (groupId != null) payload.fields.add(MapEntry('group', '$groupId'));
-    }
+    if (alertId != null) payload['alert'] = alertId;
+    if (groupId != null) payload['group'] = groupId;
 
     final response = await _safePost('/api/message/', data: payload);
     if (response.statusCode == null ||
@@ -593,14 +669,12 @@ class RestApiService {
     required int id,
     required String title,
     required String text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
   }) async {
-    final payload = await _buildMessagePayload(
+    final payload = _buildMessagePayload(
       title: title,
       text: text,
-      voiceFile: voiceFile,
       latitude: latitude,
       longitude: longitude,
     );
@@ -613,14 +687,12 @@ class RestApiService {
     required int id,
     String? title,
     String? text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
   }) async {
-    final payload = await _buildMessagePayload(
+    final payload = _buildMessagePayload(
       title: title,
       text: text,
-      voiceFile: voiceFile,
       latitude: latitude,
       longitude: longitude,
       skipNulls: true,
@@ -819,53 +891,24 @@ class RestApiService {
     return _asList(response.data);
   }
 
-  Future<dynamic> _buildMessagePayload({
+  Map<String, dynamic> _buildMessagePayload({
     String? title,
     String? text,
-    dynamic voiceFile,
     double? latitude,
     double? longitude,
     bool skipNulls = false,
-  }) async {
-    final hasFile = voiceFile != null;
-
-    if (!hasFile) {
-      final data = <String, dynamic>{
-        'title': title,
-        'text': text,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
-      if (skipNulls) {
-        data.removeWhere((key, value) => value == null);
-      }
-      return data;
-    }
-
-    MultipartFile filePart;
-    if (voiceFile is MultipartFile) {
-      filePart = voiceFile;
-    } else if (voiceFile is String) {
-      filePart = await MultipartFile.fromFile(voiceFile);
-    } else {
-      throw ArgumentError(
-        'voiceFile must be either a file path String or MultipartFile.',
-      );
-    }
-
-    final formMap = <String, dynamic>{
+  }) {
+    final data = <String, dynamic>{
       'title': title,
       'text': text,
-      'voice_file': filePart,
       'latitude': latitude,
       'longitude': longitude,
     };
 
     if (skipNulls) {
-      formMap.removeWhere((key, value) => value == null);
+      data.removeWhere((key, value) => value == null);
     }
-
-    return FormData.fromMap(formMap);
+    return data;
   }
 
   Future<Response<dynamic>> _safeGet(
@@ -903,7 +946,9 @@ class RestApiService {
     Map<String, dynamic>? queryParameters,
   }) async {
     try {
-      if (!await checkDioHeaders()) {
+      final isJwtTokenRoute =
+          path == '/api/token/' || path == '/api/token/refresh/';
+      if (!isJwtTokenRoute && !await checkDioHeaders()) {
         return _toErrorResponse(
           path: path,
           error: StateError('Missing authorization headers'),

@@ -50,7 +50,6 @@ export interface ApiMessage {
   group: number | null;
   title: string;
   text: string;
-  voice_url: string | null;
   latitude: number | null;
   longitude: number | null;
   timestamp: string;
@@ -62,9 +61,42 @@ export interface ApiGroup {
   members: number[];
 }
 
+export interface PttRoomCredentials {
+  url: string;
+  room: string;
+  token: string;
+}
+
 export interface RealtimeMessageEvent {
   type: 'message.created';
   message: ApiMessage;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly fieldErrors: Record<string, string[]>;
+
+  constructor(message: string, status: number, fieldErrors: Record<string, string[]> = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+async function errorDetails(response: Response): Promise<{ message: string; fieldErrors: Record<string, string[]> }> {
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (body?.detail && typeof body.detail === 'string') return { message: body.detail, fieldErrors: {} };
+  if (body?.error && typeof body.error === 'string') return { message: body.error, fieldErrors: {} };
+  const fieldErrors = Object.fromEntries(Object.entries(body ?? {}).filter(([, value]) =>
+    Array.isArray(value) && value.every((message) => typeof message === 'string'),
+  )) as Record<string, string[]>;
+  if (Object.keys(fieldErrors).length > 0) return { message: 'יש לתקן את השדות המסומנים.', fieldErrors };
+  return { message: `Request failed (${response.status})`, fieldErrors: {} };
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -81,8 +113,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Request failed (${response.status})`);
+    const details = await errorDetails(response);
+    throw new ApiError(details.message, response.status, details.fieldErrors);
   }
   return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
 }
@@ -103,6 +135,12 @@ export const rescueApi = {
       body: JSON.stringify({ alert: alertId, title: 'Dispatcher update', text }),
     }),
   listGroups: () => request<ApiGroup[]>('/group/'),
+  createGroup: (payload: Pick<ApiGroup, 'name' | 'members'>) =>
+    request<ApiGroup>('/group/', { method: 'POST', body: JSON.stringify(payload) }),
+  updateGroup: (id: number, payload: Partial<Pick<ApiGroup, 'name' | 'members'>>) =>
+    request<ApiGroup>(`/group/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  getPttRoomCredentials: (groupId: number) =>
+    request<PttRoomCredentials>(`/group/${groupId}/ptt-token/`, { method: 'POST' }),
 };
 
 /**

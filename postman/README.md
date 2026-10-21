@@ -49,15 +49,15 @@ If your token expires, run **Authentication → Refresh Access Token**.
 
 | Folder | # Requests | Description |
 |---|---|---|
-| Authentication | 2 | Login, Refresh Token |
+| Authentication | 4 | Register, login, refresh, and token verification |
 | Alerts | 9 | Full CRUD, nearby geosearch, dispatch, and volunteer response |
 | User Profiles | 8 | Full CRUD + location update + my profile |
 | Groups | 7 | Full CRUD + add/remove members |
 | Messages | 8 | Full CRUD + voice attachments + newest-first list |
 | Notifications | 6 | Full CRUD for push tokens |
-| Device Registration | 1 | Firebase mobile device registration |
+| Device Registration | 1 | JWT-authenticated mobile device registration |
 
-**35 requests total.**
+**37 requests total.**
 
 ---
 
@@ -69,9 +69,9 @@ Most endpoints use **JWT Bearer tokens** (obtained from Login).
 Authorization: Bearer <access_token>
 ```
 
-The **Device Registration** endpoint is the only exception — it uses a **Firebase ID Token** instead of a JWT. See its request description for details.
+The **Device Registration** endpoint also uses the same Django JWT Bearer token.
 
-**Token lifetime:** 30 days.
+Use **Authentication → Refresh Access Token** when the access token expires. Token lifetime is controlled by the server's SimpleJWT configuration; clients must not assume a fixed duration.
 
 ---
 

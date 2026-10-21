@@ -1,13 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:rescue_app/domain/routing/app_route_paths.dart';
 import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/models/alert_message.dart';
 import 'package:rescue_app/widgets/event_list.dart';
-import 'package:rescue_app/screens/event_detail_screen.dart';
+
+typedef AlertsLoader = Future<List<AlertMessage>> Function();
 
 class EventTabScreen extends StatefulWidget {
-  const EventTabScreen({super.key});
+  const EventTabScreen({this.loadAlerts, super.key});
+
+  final AlertsLoader? loadAlerts;
 
   @override
   State<EventTabScreen> createState() => _EventTabScreenState();
@@ -60,9 +65,8 @@ class _EventTabScreenState extends State<EventTabScreen> {
   }
 
   Future<void> _openEvent(AlertMessage event) async {
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (_) => EventDetailScreen(event: event)),
-    );
+    final changed =
+        await context.push<bool>(AppRoutePaths.eventDetails(event.id));
     if (changed == true && mounted) await getAlerts();
   }
 
@@ -78,9 +82,9 @@ class _EventTabScreenState extends State<EventTabScreen> {
       });
     }
     try {
-      final alertsResult = await RestApiService()
-          .getAllAlerts()
-          .timeout(const Duration(seconds: 25));
+      final alertsResult =
+          await (widget.loadAlerts?.call() ?? RestApiService().getAllAlerts())
+              .timeout(const Duration(seconds: 25));
       if (!mounted) return;
       setState(() {
         openEvents

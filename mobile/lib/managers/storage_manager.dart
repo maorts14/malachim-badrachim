@@ -1,8 +1,6 @@
 import 'dart:convert';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:rescue_app/domain/services/api/rest_api_service.dart';
 import 'package:rescue_app/models/identity_user_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -18,6 +16,8 @@ class StorageManager {
   late FlutterSecureStorage _storage;
 
   static const String bearer = 'bearer';
+  static const String jwtAccessToken = 'jwtAccessToken';
+  static const String jwtRefreshToken = 'jwtRefreshToken';
   static const String pnToken = 'pnTokenKey';
   static const resentSmsKey = 'resentSmsKey';
   static const String uUID = 'UUID';
@@ -94,39 +94,19 @@ class StorageManager {
     await set(key: StorageManager.bearer, jsonData: bearerData);
   }
 
-  Future<void> setFirebaseUserToken({
-    required String email,
-    required String token,
-  }) async {
-    if (token.isEmpty) {
-      return;
-    }
-
-    final IdentityUserData? existingIdentity = await getBearer();
-    if (existingIdentity != null) {
-      await setBearer(
-        IdentityUserData(
-          email: email,
-          accessToken: token,
-          activeBillingAccount: existingIdentity.activeBillingAccount,
-          isAdmin: existingIdentity.isAdmin,
-        ),
-      );
-    }
+  Future<void> saveJwtTokens(
+      {required String access, required String refresh}) async {
+    await _storage.write(key: jwtAccessToken, value: access);
+    await _storage.write(key: jwtRefreshToken, value: refresh);
   }
 
-  Future<void> syncFirebaseUser(User user, {bool forceRefresh = false}) async {
-    final String? idToken = await user.getIdToken(forceRefresh);
-    if (idToken == null || idToken.isEmpty) {
-      return;
-    }
+  Future<String?> getJwtAccessToken() => _storage.read(key: jwtAccessToken);
 
-    await RestApiService().setAccessAuthToken(access: idToken);
+  Future<String?> getJwtRefreshToken() => _storage.read(key: jwtRefreshToken);
 
-    await setFirebaseUserToken(
-      email: user.email ?? '',
-      token: idToken,
-    );
+  Future<void> clearJwtTokens() async {
+    await _storage.delete(key: jwtAccessToken);
+    await _storage.delete(key: jwtRefreshToken);
   }
 
   Future<bool> hasPushNotificationToken() async {
@@ -149,6 +129,7 @@ class StorageManager {
   Future logout() async {
     identityUser = null;
     await _storage.delete(key: StorageManager.bearer);
+    await clearJwtTokens();
   }
 
   Future<String?> getUUID() async {

@@ -27,7 +27,6 @@ dependencies:
   json_annotation: ^4.11.0
   flutter_secure_storage: ^10.0.0
   firebase_core: ^4.12.1
-  firebase_auth: ^6.5.6
   device_info_plus: ^13.3.0
   mapbox_maps_flutter: ^2.26.0
   geolocator: ^14.0.2
@@ -36,10 +35,9 @@ dependencies:
   rflutter_alert: ^2.0.7
   flutter_local_notifications: ^22.2.0
   app_links: ^7.0.0
-  audioplayers: ^6.6.0
-  record: ^6.2.0
   web_socket_channel: ^3.0.3
   change_app_package_name: ^1.5.0
+  livekit_client: 2.13.0
 
 dev_dependencies:
   flutter_test:
@@ -54,7 +52,6 @@ flutter:
 
   assets:
     - .env.local
-    - .env.staging
     - .env.production
     - assets/images/
     - assets/images/figma/

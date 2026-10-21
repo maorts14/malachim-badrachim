@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import "./Situation.css";
 import { toDashboardUser } from "../../data/userPresentation";
 import { rescueApi } from "../../services/api";
 import type { User } from "../../types/types";
 import Avatar from "../Avatar/Avatar";
 import { Timestamp, StatusCell } from "../../utils/utils";
+import ResourceState from '../ResourceState/ResourceState';
+import { useDashboardResource } from '../../hooks/useDashboardResource';
 
 type SortOrder = "asc" | "desc" | null;
 
@@ -12,23 +14,10 @@ export default function Situation() {
   const [contactSearch, setContactSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("הכל");
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
-  const [rows, setRows] = useState<User[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
-      setRows((await rescueApi.listUsers()).map(toDashboardUser));
-      setError(null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'טעינת המשתמשים נכשלה.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { void loadUsers(); }, []);
+  const loadUsers = useCallback(async (): Promise<User[]> =>
+    (await rescueApi.listUsers()).map(toDashboardUser), []);
+  const usersResource = useDashboardResource(loadUsers);
+  const rows = usersResource.data ?? [];
 
   // Robust parser: handles Date object, ISO string, or "DD/MM/YYYY HH:mm"
   const parseDate = (value: unknown) => {
@@ -88,11 +77,11 @@ export default function Situation() {
       {/* Header */}
       <div className="situation__header">
         <span className="situation__title">סטטוס</span>
-        <span className="situation__count">{loading ? 'טוען…' : `${rows.length} משתמשים`}</span>
-        <button type="button" onClick={loadUsers} disabled={loading}>רענן</button>
+        <span className="situation__count">{usersResource.loading ? 'טוען…' : `${rows.length} משתמשים`}</span>
+        <button type="button" onClick={() => void usersResource.refresh()} disabled={usersResource.loading || usersResource.refreshing}>רענן</button>
       </div>
 
-      {error && <p role="alert">{error}</p>}
+      <ResourceState error={usersResource.error} loading={usersResource.loading} refreshing={usersResource.refreshing} empty={rows.length === 0} onRetry={() => void usersResource.refresh()} loadingLabel="טוען משתמשים…" emptyLabel="אין משתמשים להצגה." />
 
       {/* Table */}
       <div className="situation__table-scroll">
@@ -152,7 +141,7 @@ export default function Situation() {
           </thead>
 
           <tbody>
-            {!loading && !error && sorted.length === 0 && <tr><td colSpan={5}>אין משתמשים להצגה</td></tr>}
+            {!usersResource.loading && !usersResource.error && sorted.length === 0 && <tr><td colSpan={5}>אין משתמשים להצגה</td></tr>}
             {sorted.map((row) => (
               <tr key={row.id} className="situation__row">
                 <td className="situation__cell" data-label="איש קשר">

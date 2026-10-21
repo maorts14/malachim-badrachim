@@ -65,12 +65,28 @@ When an incident occurs, the system identifies nearby available volunteers and a
   <li><strong>Admin Panel:</strong> React 19 + TypeScript + Vite (web dispatcher dashboard)</li>
   <li><strong>Mobile App:</strong> Flutter</li>
   <li><strong>Notifications:</strong> Firebase Cloud Messaging (FCM)</li>
+  <li><strong>Live push-to-talk:</strong> LiveKit (self-hosted)</li>
   <li><strong>Infrastructure:</strong> Docker + Docker Compose</li>
 </ul>
 
 <hr>
 
 <h2>🚀 Getting Started</h2>
+
+<h3>Authentication configuration</h3>
+<p>
+Responder accounts are Django accounts. The Flutter app uses Django JWT access
+and refresh tokens; the dispatcher web app uses Django's CSRF-protected session
+cookie. Firebase Messaging is used only for push delivery.
+</p>
+<p>
+To enable password-reset emails, set <code>DEFAULT_FROM_EMAIL</code>, configure
+Django's email backend for the deployment, and set <code>PASSWORD_RESET_URL</code>
+to a URL template containing <code>{uid}</code> and <code>{token}</code>. The
+mobile app accepts <code>rescuealert://reset-password/{uid}/{token}</code> on
+Android and iOS; use that template unless a production universal/app-link
+domain is configured.
+</p>
 
 <p>
 The project is containerized with Docker to make local setup simpler and more consistent across development environments.
@@ -83,17 +99,23 @@ The project is containerized with Docker to make local setup simpler and more co
   <li>Docker Compose</li>
 </ul>
 
+<p><strong>PostgreSQL with PostGIS is required in every environment.</strong>
+SQLite is unsupported: local development, tests, and production all use the
+PostGIS service supplied by Docker Compose.</p>
+
 <h3>Local Setup</h3>
 
 <pre>
 git clone https://github.com/ShimonNavon/rescue-alert-system.git
 cd rescue-alert-system
-cp .env.example .env
-docker compose --profile dev up --build
+.\scripts\dev.ps1 up
 </pre>
 
 <p>
-The <code>dev</code> profile adds the Vite dev server for the admin panel. Without it (<code>docker compose up --build</code>) only the backend and database start — which is how production runs, since nginx serves the built panel there.
+The supported local-development path starts PostGIS, Redis, the Django backend,
+and the Vite admin panel together. Follow <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>
+for the one-time local configuration, status, shutdown, reset, and mobile-app
+commands.
 </p>
 
 <h3>Run Migrations</h3>
@@ -104,11 +126,21 @@ The <code>dev</code> profile adds the Vite dev server for the admin panel. Witho
 docker compose exec backend python manage.py migrate
 </pre>
 
+<h3>Database migration support</h3>
+
+<p>
+The current migration set is the supported baseline for fresh PostGIS databases.
+Upgrade paths from the project's historic migration chains are not supported yet.
+Because the application has not been deployed, local development databases may be
+recreated from scratch when adopting this baseline. Do not rely on
+<code>migrate</code> to convert a database created by an earlier migration history.
+</p>
+
 <h3>Service URLs</h3>
 
 <ul>
-  <li><strong>Backend API:</strong> <code>http://127.0.0.1:8004</code> (gunicorn on port 8000 inside the container)</li>
-  <li><strong>Admin Panel:</strong> <code>http://localhost:5173</code> (<code>dev</code> profile only)</li>
+  <li><strong>Backend API:</strong> <code>http://localhost:8004</code> (Daphne on port 8000 inside the container)</li>
+  <li><strong>Admin Panel:</strong> <code>http://localhost:5173</code></li>
   <li><strong>API docs:</strong> <code>http://127.0.0.1:8004/api/docs/</code></li>
 </ul>
 
@@ -133,7 +165,10 @@ npm run dev
 
 <h3>Run with Docker Compose</h3>
 
-<p>The admin panel lives behind the <code>dev</code> profile: <code>docker compose --profile dev up --build</code>.</p>
+<p>For local work, use <code>.\scripts\dev.ps1 up</code> after completing the
+configuration in <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>. The root Compose
+file is production-oriented; it leaves the Vite server out by default because
+nginx serves the built panel in production.</p>
 
 <hr>
 
@@ -141,6 +176,15 @@ npm run dev
 
 <p>
 The stack runs on <code>debian01</code> under <code>/srv/rescue-alert-system</code>. Host nginx (port 80, TLS terminated at Cloudflare) proxies <code>/api/</code> and <code>/admin/</code> to <code>127.0.0.1:8004</code> and serves the built admin panel from <code>admin-panel/dist</code>.
+</p>
+
+<p>
+Live push-to-talk is a separate self-hosted LiveKit service. Configure its public
+<code>wss://</code> URL and API credentials as <code>LIVEKIT_URL</code>,
+<code>LIVEKIT_API_KEY</code>, and <code>LIVEKIT_API_SECRET</code> in the backend
+environment. Django only issues 15-minute, group-scoped room tokens; it does
+not store or replay PTT audio. See <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>
+for local development.
 </p>
 
 <pre>

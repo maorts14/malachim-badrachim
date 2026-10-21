@@ -5,6 +5,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     AlertViewSet, RegisterDeviceView, WhoAmIView, RegisterView,
     SessionView, SessionLoginView, SessionLogoutView, JWTLogoutView,
+    PasswordResetRequestView, PasswordResetConfirmView,
     UserProfileViewSet, GroupViewSet, MessageViewSet, NotificationViewSet,
 )
 
@@ -20,6 +21,8 @@ urlpatterns = router.urls + [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('auth/logout/', JWTLogoutView.as_view(), name='jwt-logout'),
+    path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
+    path('auth/password-reset/<uid>/<token>/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     # Both spellings are registered on purpose. Shipped mobile builds POST to
     # the slashless form; dropping it would make APPEND_SLASH answer with a 301
     # that most HTTP clients replay as a GET, silently losing the device token.

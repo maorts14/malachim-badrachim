@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rescue_app/models/alert_message.dart';
 import 'package:rescue_app/screens/event_detail_screen.dart';
+import 'package:rescue_app/screens/event_tab_screen.dart';
 import 'package:rescue_app/widgets/event_list.dart';
 
 void main() {
@@ -85,6 +86,34 @@ void main() {
     expect(find.text('אירוע #2841'), findsOneWidget);
     expect(find.text('אני מגיע/ה'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows an actionable error and retries a failed event load',
+      (WidgetTester tester) async {
+    var attempts = 0;
+    Future<List<AlertMessage>> loadAlerts() async {
+      attempts += 1;
+      if (attempts == 1) throw StateError('offline');
+      return <AlertMessage>[];
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: EventTabScreen(loadAlerts: loadAlerts)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('לא ניתן להתחבר לשרת'), findsOneWidget);
+    expect(find.text('נסה שוב'), findsOneWidget);
+
+    await tester.tap(find.text('נסה שוב'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(attempts, 2);
+    expect(find.text('אין אירועים להצגה כרגע'), findsOneWidget);
   });
 }
 

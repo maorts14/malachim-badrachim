@@ -76,7 +76,6 @@ id: string
 eventId: string 
 title?: string 
 text?: string 
-voiceUrl?: string 
 location?: OriginGeoLocation 
 user: { 
 id: string 
