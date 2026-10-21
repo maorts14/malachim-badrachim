@@ -129,6 +129,45 @@ void main() {
     expect(requests.map((request) => request.path),
         <String>['/api/token/refresh/']);
   });
+
+  test('public account routes do not require a JWT before the request',
+      () async {
+    respond = (request) {
+      if (request.path == '/api/auth/register/') {
+        return _Response.ok(<String, String>{
+          'access': 'new-access',
+          'refresh': 'new-refresh',
+        });
+      }
+      if (request.path == '/api/auth/password-reset/' ||
+          request.path == '/api/auth/password-reset/uid/token/') {
+        return const _Response(204, <String, String>{});
+      }
+      return _Response.notFound();
+    };
+
+    await RestApiService().register(
+      email: 'new@example.com',
+      password: 'password123',
+    );
+    await RestApiService().clearTokens();
+    await RestApiService().requestPasswordReset(email: 'new@example.com');
+    await RestApiService().confirmPasswordReset(
+      uid: 'uid',
+      token: 'token',
+      password: 'password456',
+    );
+
+    expect(
+      requests.map((request) => '${request.method} ${request.path}'),
+      <String>[
+        'POST /api/auth/register/',
+        'POST /api/auth/password-reset/',
+        'POST /api/auth/password-reset/uid/token/',
+      ],
+    );
+    expect(requests.every((request) => request.authorization == null), isTrue);
+  });
 }
 
 Future<void> _serve(

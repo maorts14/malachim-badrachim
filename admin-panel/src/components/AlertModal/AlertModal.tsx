@@ -1,8 +1,7 @@
 import { type FC, useEffect, useState } from "react";
 import { X, AlertCircle, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import "./AlertModal.css";
-import { fetchAlerts } from "../../services/alertsService";
-import type { ApiAlert } from "../../services/api";
+import { rescueApi, type ApiAlert } from "../../services/api";
 
 type Props = {
     open: boolean;
@@ -21,13 +20,13 @@ const AlertModal: FC<Props> = ({ open, onClose }) => {
         const loadAlerts = async () => {
             setLoading(true);
             setError(null);
-            const { data, error: fetchError } = await fetchAlerts();
-            if (fetchError) {
-                setError(fetchError);
-            } else {
-                setAlerts(data);
+            try {
+                setAlerts(await rescueApi.listAlerts());
+            } catch (fetchError) {
+                setError(fetchError instanceof Error ? fetchError.message : 'טעינת ההתראות נכשלה.');
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         loadAlerts();
