@@ -72,6 +72,20 @@ export interface RealtimeMessageEvent {
   message: ApiMessage;
 }
 
+export interface SessionUser {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  role: string | null;
+  is_staff: boolean;
+}
+
+export interface SessionResponse {
+  authenticated: boolean;
+  user: SessionUser | null;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly fieldErrors: Record<string, string[]>;
@@ -120,6 +134,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const rescueApi = {
+  getSession: () => request<SessionResponse>('/auth/session/'),
+  login: (username: string, password: string) =>
+    request<SessionResponse>('/auth/session/login/', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => request<void>('/auth/session/logout/', { method: 'POST' }),
   listAlerts: () => request<ApiAlert[]>('/alerts/'),
   listUsers: () => request<ApiUser[]>('/user/'),
   createAlert: (payload: Pick<ApiAlert, 'title' | 'description' | 'latitude' | 'longitude' | 'priority'>) =>

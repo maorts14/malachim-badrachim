@@ -1,8 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { rescueApi, type SessionUser } from '@/services/api';
 
-export interface AuthUser { id: number; username: string; email: string; name: string; role: string | null; is_staff: boolean; }
-const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
+export type AuthUser = SessionUser;
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -24,8 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(`${apiBase}/auth/session/`, { credentials: 'include' })
-      .then((response) => response.json())
+    void rescueApi.getSession()
       .then((data) => { if (!cancelled) setUser(data.authenticated ? data.user : null); })
       .catch(() => { if (!cancelled) setUser(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -33,16 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (identifier: string, password: string) => {
-    const csrfToken = document.cookie.split('; ').find((item) => item.startsWith('csrftoken='))?.split('=')[1] ?? '';
-    const response = await fetch(`${apiBase}/auth/session/login/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': decodeURIComponent(csrfToken) }, body: JSON.stringify({ username: identifier.trim(), password }) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail ?? data.non_field_errors?.[0] ?? 'ההתחברות נכשלה.');
+    const data = await rescueApi.login(identifier.trim(), password);
     setUser(data.user);
   };
 
   const logout = async () => {
-    const csrfToken = document.cookie.split('; ').find((item) => item.startsWith('csrftoken='))?.split('=')[1] ?? '';
-    await fetch(`${apiBase}/auth/session/logout/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': decodeURIComponent(csrfToken) } });
+    await rescueApi.logout();
     setUser(null);
   };
 
