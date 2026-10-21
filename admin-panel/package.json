@@ -37,7 +37,7 @@
     "jsdom": "^28.1.0",
     "livekit-server-sdk": "^2.19.1",
     "typescript": "~6.0.2",
-    "typescript-eslint": "^8.59.2",
+    "typescript-eslint": "^8.71.2",
     "vite": "^8.0.12",
     "vitest": "^4.1.12"
   }
