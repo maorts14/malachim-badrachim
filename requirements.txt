@@ -10,4 +10,4 @@ gunicorn
 whitenoise
 channels[daphne]
 channels_redis
-livekit-api==1.2.2
+livekit-api==2.0.1
